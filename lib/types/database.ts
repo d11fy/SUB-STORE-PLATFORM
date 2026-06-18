@@ -616,6 +616,31 @@ export interface Database {
         };
         Update: Partial<Database["public"]["Tables"]["admin_logs"]["Insert"]>;
       };
+      domains: {
+        Row: {
+          id: string;
+          store_id: string;
+          domain: string;
+          is_verified: boolean;
+          is_primary: boolean;
+          verified_at: string | null;
+          dns_records: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          domain: string;
+          is_verified?: boolean;
+          is_primary?: boolean;
+          verified_at?: string | null;
+          dns_records?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["domains"]["Insert"]>;
+      };
       store_pages: {
         Row: {
           id: string;
@@ -695,6 +720,7 @@ export type ProductImage = Database["public"]["Tables"]["product_images"]["Row"]
 export type StoreThemeSettings = Database["public"]["Tables"]["store_theme_settings"]["Row"];
 export type AdminLog = Database["public"]["Tables"]["admin_logs"]["Row"];
 export type StorePage = Database["public"]["Tables"]["store_pages"]["Row"];
+export type StoreDomain = Database["public"]["Tables"]["domains"]["Row"];
 
 // ============================================================
 // EXTENDED TYPES (with relations)
