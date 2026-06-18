@@ -105,7 +105,7 @@ export async function createProduct(
       };
     }
 
-    // Insert product (cast as any: product_type and related columns not yet in DB schema)
+    // Insert product
     const { data: product, error: insertError } = await supabase
       .from("products")
       .insert({
@@ -124,6 +124,9 @@ export async function createProduct(
         barcode: null,
         track_inventory: true,
         is_digital: validated.data.product_type === "digital",
+        product_type: validated.data.product_type,
+        subscription_duration_value: validated.data.subscription_duration_value ?? null,
+        subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
         weight: null,
         tags: [],
         attributes: {},
@@ -202,6 +205,9 @@ export async function updateProduct(
         is_active: validated.data.is_active,
         is_featured: validated.data.is_featured,
         is_digital: validated.data.product_type === "digital",
+        product_type: validated.data.product_type,
+        subscription_duration_value: validated.data.subscription_duration_value ?? null,
+        subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
       } as any)
       .eq("id", productId)
       .eq("store_id", storeId)

@@ -20,10 +20,10 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { slug } = await params;
   const supabase = createAdminClient();
 
-  // Fetch store — avoid selecting columns that may not exist in all DB versions
+  // Fetch store
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, currency")
+    .select("id, currency, requires_shipping")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -31,6 +31,8 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
     console.error("Checkout: store fetch failed", storeError);
     notFound();
   }
+
+  const requiresShipping = store.requires_shipping ?? true;
 
   // Fetch active shipping methods
   const { data: shippingMethods } = await supabase
@@ -61,7 +63,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
         shippingMethods={shippingMethods || []}
         paymentMethods={paymentMethods || []}
         currency={store.currency}
-        requiresShipping={true}
+        requiresShipping={requiresShipping}
       />
     </div>
   );

@@ -67,12 +67,13 @@ async function writeSettings(
       .select("current_theme_id")
       .eq("id", storeId)
       .single();
+    const themeId = storeData?.current_theme_id || null;
     const { error } = await supabase.from("store_theme_settings").insert({
       store_id: storeId,
-      theme_id: storeData?.current_theme_id ?? "",
+      theme_id: themeId ?? "",
       settings: settingsJson,
       ...(extraCols ?? {}),
-    });
+    } as any);
     return { error: error?.message ?? null };
   }
 }
@@ -102,6 +103,7 @@ export async function saveThemeDraftAction(
     if (error) return { success: false, error: "فشل حفظ المسودة: " + error };
 
     revalidatePath("/dashboard/themes/customize");
+    revalidatePath("/dashboard/themes");
     return { success: true, error: null };
   } catch (err) {
     console.error("saveThemeDraftAction error:", err);

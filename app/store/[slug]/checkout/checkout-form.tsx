@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ShoppingBag, Loader2, CreditCard, Truck, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Loader2, CreditCard, ShieldCheck, Paperclip, X } from "lucide-react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
-import { createCustomerOrder, validateAndCalculateOrder } from "@/actions/checkout";
+import { createCustomerOrder, validateAndCalculateOrder, submitPaymentProof } from "@/actions/checkout";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -62,6 +62,11 @@ export function CheckoutForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [calcLoading, setCalcLoading] = useState(false);
+
+  // Payment proof file state (for bank_transfer / local_wallet methods)
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofBase64, setProofBase64] = useState<string | null>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
 
   const { items, getCartTotal, clearCart } = useCartStore();
   const subtotal = getCartTotal();
@@ -160,7 +165,41 @@ export function CheckoutForm({
   const finalShippingCost = requiresShipping ? (shippingCost !== null ? shippingCost : currentShippingMethod?.base_price ?? 0) : 0;
   const grandTotal = subtotal + finalShippingCost;
 
+  // Check if selected payment method requires a proof upload
+  const proofRequired =
+    currentPaymentMethod?.type === "bank_transfer" ||
+    currentPaymentMethod?.type === "local_wallet";
+
+  const handleProofFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("صيغة الملف غير مدعومة (JPG, PNG, WEBP, PDF فقط)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setProofBase64(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    setProofFile(file);
+    e.target.value = "";
+  };
+
   const onSubmit = async (data: CheckoutInput) => {
+    // Block if proof is required but not uploaded
+    if (proofRequired && !proofBase64) {
+      toast.error("يرجى رفع إثبات الدفع (وصل التحويل) قبل تأكيد الطلب");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const checkoutItems = items.map((i) => ({
@@ -175,6 +214,22 @@ export function CheckoutForm({
       const res = await createCustomerOrder(storeSlug, data, checkoutItems);
 
       if (res.success && res.orderId) {
+        // Upload payment proof immediately after order creation
+        if (proofRequired && proofBase64 && proofFile) {
+          const proofRes = await submitPaymentProof(
+            res.orderId,
+            data.full_name,
+            null,
+            proofBase64,
+            proofFile.name,
+            proofFile.type
+          );
+          if (!proofRes.success) {
+            // Proof upload failed — order still created, warn the user
+            toast.warning("تم إنشاء طلبك، لكن فشل رفع وصل الدفع. يرجى التواصل مع المتجر.");
+          }
+        }
+
         toast.success("تم إرسال طلبك بنجاح! 🎉");
         clearCart();
         router.push(`/store/${storeSlug}/orders/${res.orderId}`);
@@ -430,6 +485,53 @@ export function CheckoutForm({
             <p className="text-destructive text-[10px]">{errors.payment_method_id.message}</p>
           )}
         </div>
+
+        {/* Payment Proof Upload — required for bank_transfer / local_wallet */}
+        {proofRequired && (
+          <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl space-y-3">
+            <h2 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+              <Paperclip className="h-4 w-4" />
+              رفع إثبات الدفع (مطلوب)
+            </h2>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              بعد تسديد المبلغ، يرجى رفع صورة أو ملف وصل التحويل لتتمكن من تأكيد طلبك.
+            </p>
+
+            {proofFile ? (
+              <div className="flex items-center justify-between p-3 bg-white border border-amber-200 rounded-xl">
+                <div className="flex items-center gap-2 text-xs text-foreground min-w-0">
+                  <Paperclip className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span className="truncate font-medium">{proofFile.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setProofFile(null); setProofBase64(null); }}
+                  className="shrink-0 p-1 rounded-lg hover:bg-amber-100 text-amber-600 transition-colors cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => proofInputRef.current?.click()}
+                className="w-full py-3 border-2 border-dashed border-amber-300 rounded-xl text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Paperclip className="h-4 w-4" />
+                اختر ملف إثبات الدفع
+              </button>
+            )}
+
+            <input
+              ref={proofInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              className="hidden"
+              onChange={handleProofFileChange}
+            />
+            <p className="text-[10px] text-amber-600">يُسمح بصور JPG, PNG, WEBP وملفات PDF — الحد الأقصى 5 ميجابايت</p>
+          </div>
+        )}
       </div>
 
       {/* Bill summary column (1/3 width) */}
@@ -477,7 +579,13 @@ export function CheckoutForm({
 
           <button
             type="submit"
-            disabled={isSubmitting || (requiresShipping && calcLoading) || (requiresShipping && shippingMethods.length === 0) || paymentMethods.length === 0}
+            disabled={
+              isSubmitting ||
+              (requiresShipping && calcLoading) ||
+              (requiresShipping && shippingMethods.length === 0) ||
+              paymentMethods.length === 0 ||
+              (proofRequired && !proofBase64)
+            }
             className="w-full py-4 bg-primary text-white font-bold text-sm rounded-xl hover:bg-primary/95 transition-all shadow-[0_4px_20px_rgba(27,79,216,0.3)] flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 cursor-pointer"
           >
             {isSubmitting ? (

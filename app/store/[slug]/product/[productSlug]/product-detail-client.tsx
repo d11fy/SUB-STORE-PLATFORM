@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShoppingBag, Plus, Minus, AlertTriangle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ShoppingBag, Zap, Plus, Minus, AlertTriangle } from "lucide-react";
 import { useCartStore, type CartItem } from "@/lib/store/cart-store";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ export function ProductDetailClient({
   primaryImage,
   currency,
 }: ProductDetailClientProps) {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -86,6 +88,26 @@ export function ProductDetailClient({
     forceAddItem(cartItem);
     setShowConfirm(false);
     toast.success(`تم تفريغ السلة السابقة وبدء سلة جديدة لمتجر آخر! 🎉`);
+  };
+
+  const handleBuyNow = () => {
+    if (isOutOfStock) return;
+
+    const cartItem: CartItem = {
+      product_id: product.id,
+      store_id: product.store_id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      sale_price: hasDiscount ? product.price : null,
+      image: primaryImage,
+      quantity: quantity,
+      stock: product.stock_quantity,
+    };
+
+    // Always force-add to ensure this item is in the cart (clears other-store items)
+    forceAddItem(cartItem);
+    router.push(`/store/${storeSlug}/checkout`);
   };
 
   return (
@@ -159,13 +181,23 @@ export function ProductDetailClient({
             </div>
           </div>
 
-          <button
-            onClick={handleAddToCart}
-            className="w-full py-4 bg-primary text-white font-bold text-sm rounded-xl hover:bg-primary/95 transition-all shadow-[0_4px_20px_rgba(27,79,216,0.35)] flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-          >
-            <ShoppingBag className="h-4 w-4" />
-            إضافة إلى سلة المشتريات
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleBuyNow}
+              className="w-full py-4 bg-primary text-white font-bold text-sm rounded-xl hover:bg-primary/95 transition-all shadow-[0_4px_20px_rgba(27,79,216,0.35)] flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+            >
+              <Zap className="h-4 w-4" />
+              شراء الآن
+            </button>
+
+            <button
+              onClick={handleAddToCart}
+              className="w-full py-3 bg-muted border border-border text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              إضافة إلى السلة
+            </button>
+          </div>
         </div>
       )}
 
