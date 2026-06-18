@@ -69,7 +69,7 @@ export function MobileSidebarDrawer({ store, user }: Props) {
       {/* Mobile hamburger trigger */}
       <button
         onClick={() => setOpen(true)}
-        className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors min-h-10 min-w-10 flex items-center justify-center"
+        className="md:hidden p-2 rounded-lg text-foreground hover:bg-sidebar-accent border border-border transition-colors min-h-9 min-w-9 flex items-center justify-center shrink-0"
         aria-label="فتح القائمة"
       >
         <Menu className="h-5 w-5" />

@@ -13,10 +13,19 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ store, user, mobileMenuSlot }: DashboardHeaderProps) {
   return (
-    <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 border-b border-border bg-sidebar/50 backdrop-blur-sm sticky top-0 z-10">
-      {/* Left: Mobile menu + Breadcrumb */}
-      <div className="flex items-center gap-2 sm:gap-3">
+    <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 border-b border-border bg-sidebar/80 backdrop-blur-md sticky top-0 z-10">
+
+      {/* ── START (right in RTL): hamburger + store name / breadcrumb ── */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        {/* Hamburger — mobile only, rendered by MobileSidebarDrawer */}
         {mobileMenuSlot}
+
+        {/* Mobile: store name only */}
+        <span className="sm:hidden text-sm font-bold text-foreground font-cairo truncate max-w-[160px]">
+          {store.name}
+        </span>
+
+        {/* Desktop: breadcrumb */}
         <div className="hidden sm:flex items-center gap-2">
           <span className="text-sm text-muted-foreground">متجر</span>
           <span className="text-muted-foreground">/</span>
@@ -24,9 +33,9 @@ export function DashboardHeader({ store, user, mobileMenuSlot }: DashboardHeader
         </div>
       </div>
 
-      {/* Right: Actions + User */}
-      <div className="flex items-center gap-2">
-        {/* View Store */}
+      {/* ── END (left in RTL): actions + user ── */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* View Store — desktop only */}
         <a
           href={`/store/${store.slug}`}
           target="_blank"
@@ -39,15 +48,14 @@ export function DashboardHeader({ store, user, mobileMenuSlot }: DashboardHeader
 
         {/* Notifications */}
         <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors">
-          <Bell className="h-5 w-5" />
-          {/* Notification dot */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
+          <Bell className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full" />
         </button>
 
         {/* User Menu */}
         <div className="relative group">
           <button className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-sidebar-accent transition-colors">
-            <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-cairo font-bold text-primary">
+            <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-cairo font-bold text-primary shrink-0">
               {user?.full_name ? getInitials(user.full_name) : "م"}
             </div>
             <span className="hidden sm:block text-sm text-foreground max-w-[100px] truncate">
