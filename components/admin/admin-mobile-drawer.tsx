@@ -77,7 +77,7 @@ export function AdminMobileDrawer({ user }: Props) {
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
           onClick={() => setOpen(false)}
         />
       )}
@@ -92,12 +92,6 @@ export function AdminMobileDrawer({ user }: Props) {
       >
         {/* Header */}
         <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
-          <button
-            onClick={() => setOpen(false)}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
           <Link href="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
             <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-white font-cairo font-bold text-sm">
               أ
@@ -107,6 +101,12 @@ export function AdminMobileDrawer({ user }: Props) {
               <p className="text-xs text-muted-foreground">Saba Store Admin</p>
             </div>
           </Link>
+          <button
+            onClick={() => setOpen(false)}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Admin profile */}

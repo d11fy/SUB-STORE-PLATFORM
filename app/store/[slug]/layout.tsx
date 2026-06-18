@@ -32,6 +32,13 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
     notFound();
   }
 
+  const { data: pages } = await supabase
+    .from("store_pages")
+    .select("id, title, slug, show_in_header, show_in_footer")
+    .eq("store_id", store.id)
+    .eq("status", "published")
+    .order("created_at");
+
   if (store.status === "suspended" || store.status === "pending") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-6 text-center font-cairo">
@@ -138,6 +145,7 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
         store={store as any}
         settings={themeSettings as any}
         headerConfig={headerConfig}
+        pages={pages ?? []}
       />
 
       {/* ── MAIN CONTENT ── */}
@@ -150,6 +158,7 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
         store={store as any}
         settings={themeSettings as any}
         footerConfig={footerConfig}
+        pages={pages ?? []}
       />
     </div>
   );

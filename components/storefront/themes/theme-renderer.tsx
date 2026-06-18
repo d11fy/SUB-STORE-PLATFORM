@@ -7,6 +7,14 @@ import type { Store, StoreThemeSettings } from "@/lib/types/database";
 import type { StorefrontThemeProps, StoreWithTheme } from "./theme-types";
 import type { HeaderConfig, FooterConfig } from "@/lib/themes/customization-types";
 
+interface StorePage {
+  id: string;
+  title: string;
+  slug: string;
+  show_in_header: boolean;
+  show_in_footer: boolean;
+}
+
 import FashionTheme from "./fashion-theme";
 import ElectronicsTheme from "./electronics-theme";
 import SubscriptionsTheme from "./subscriptions-theme";
@@ -47,9 +55,10 @@ interface ThemeHeaderProps {
   store: StoreWithTheme;
   settings: StoreThemeSettings;
   headerConfig?: HeaderConfig;
+  pages?: StorePage[];
 }
 
-export function ThemeHeader({ store, settings, headerConfig }: ThemeHeaderProps) {
+export function ThemeHeader({ store, settings, headerConfig, pages = [] }: ThemeHeaderProps) {
   const slug = store.slug;
   const themeSlug = store.themes?.slug || "fashion";
 
@@ -90,10 +99,16 @@ export function ThemeHeader({ store, settings, headerConfig }: ThemeHeaderProps)
     ? "bg-emerald-600"
     : "bg-primary";
 
-  const navLinks = headerConfig?.nav_links ?? [
+  const baseNavLinks = headerConfig?.nav_links ?? [
     { label: "الرئيسية", href: `/store/${slug}` },
     { label: "كل المنتجات", href: `/store/${slug}/products` },
   ];
+
+  const headerPageLinks = pages
+    .filter((p) => p.show_in_header)
+    .map((p) => ({ label: p.title, href: `/store/${slug}/${p.slug}` }));
+
+  const navLinks = [...baseNavLinks, ...headerPageLinks];
 
   return (
     <header
@@ -153,11 +168,13 @@ interface ThemeFooterProps {
   store: StoreWithTheme;
   settings: StoreThemeSettings;
   footerConfig?: FooterConfig;
+  pages?: StorePage[];
 }
 
-export function ThemeFooter({ store, settings, footerConfig }: ThemeFooterProps) {
+export function ThemeFooter({ store, settings, footerConfig, pages = [] }: ThemeFooterProps) {
   const socialLinks = store.social_links as any;
   const themeSlug = store.themes?.slug || "fashion";
+  const footerPages = pages.filter((p) => p.show_in_footer);
 
   const isMinimal = themeSlug === "blank" || themeSlug === "fashion";
   const isRose = themeSlug === "personal_services";
@@ -193,15 +210,40 @@ export function ThemeFooter({ store, settings, footerConfig }: ThemeFooterProps)
     );
   }
 
-  // Simple / columns layout: full 3-column footer
+  // Simple / columns layout: full footer
+  const colCount = footerPages.length > 0 ? 4 : 3;
+  const gridCls =
+    colCount === 4
+      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+      : "grid-cols-1 md:grid-cols-3";
+
   return (
     <footer className="border-t border-border pt-12 pb-8 bg-card transition-colors" dir="rtl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid ${gridCls} gap-8 mb-12`}>
         {/* About Column */}
         <div className="space-y-4 text-right">
           <h4 className="font-bold text-foreground text-sm">حول متجرنا</h4>
           <p className="text-muted-foreground text-xs leading-relaxed max-w-sm">{footerText}</p>
         </div>
+
+        {/* Store Pages Column */}
+        {footerPages.length > 0 && (
+          <div className="space-y-4 text-right">
+            <h4 className="font-bold text-foreground text-sm">روابط مهمة</h4>
+            <ul className="space-y-2">
+              {footerPages.map((page) => (
+                <li key={page.id}>
+                  <Link
+                    href={`/store/${store.slug}/${page.slug}`}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {page.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Contact Column */}
         <div className="space-y-4 text-right">
