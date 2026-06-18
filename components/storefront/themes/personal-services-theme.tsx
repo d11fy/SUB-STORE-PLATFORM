@@ -118,24 +118,31 @@ export default function PersonalServicesTheme({ store, categories, products, set
 
     categories: () =>
       categories.length > 0 ? (
-        <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-right">
-            <h2 className="text-2xl font-black text-foreground font-cairo">مجالات عملي</h2>
-            <p className="text-xs text-muted-foreground font-cairo mt-1">التخصصات التي أقدم فيها خدماتي</p>
+        <section className="py-10 space-y-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-right">
+              <h2 className="text-xl font-black text-foreground font-cairo">مجالات عملي</h2>
+              <p className="text-xs text-muted-foreground font-cairo mt-1">التخصصات التي أقدم فيها خدماتي</p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {categories.slice(0, 8).map((category, idx) => (
-              <Link
-                key={category.id}
-                href={`/store/${slug}/category/${category.slug}`}
-                className="group bg-card border border-border hover:border-rose-200 rounded-2xl p-5 text-center space-y-3 transition-all hover:shadow-sm"
-              >
-                <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-2xl mx-auto group-hover:scale-105 transition-transform">
-                  {SERVICE_ICONS[idx % SERVICE_ICONS.length]}
-                </div>
-                <h3 className="text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors font-cairo">{category.name}</h3>
-              </Link>
-            ))}
+          <div className="overflow-hidden marquee-pause">
+            <div className="flex gap-3 w-max animate-marquee">
+              {[...categories.slice(0, 8), ...categories.slice(0, 8)].map((category, idx) => {
+                const base = categories.slice(0, 8).length;
+                return (
+                  <Link
+                    key={`cat-${idx}`}
+                    href={`/store/${slug}/category/${category.slug}`}
+                    className="group flex-shrink-0 flex items-center gap-2.5 px-5 py-3 bg-card border border-border hover:border-rose-300 rounded-2xl text-xs font-bold text-muted-foreground hover:text-rose-600 transition-all duration-200 hover:shadow-md font-cairo whitespace-nowrap"
+                  >
+                    <span className="text-lg group-hover:scale-110 transition-transform duration-200 leading-none">
+                      {SERVICE_ICONS[(idx % base) % SERVICE_ICONS.length]}
+                    </span>
+                    {category.name}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </section>
       ) : null,
@@ -143,8 +150,8 @@ export default function PersonalServicesTheme({ store, categories, products, set
     services_list: () =>
       allServices.length > 0 ? (
         <section id="services" className="py-16 bg-muted/20 border-y border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-            <div className="flex items-baseline justify-between border-b border-border pb-4">
+          <div className="space-y-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-baseline justify-between border-b border-border pb-4">
               <Link href={`/store/${slug}/products`} className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors font-cairo flex items-center gap-1">
                 شاهد كل الخدمات
                 <ArrowLeft className="h-3.5 w-3.5 rtl:rotate-180" />
@@ -154,32 +161,38 @@ export default function PersonalServicesTheme({ store, categories, products, set
                 <p className="text-xs text-muted-foreground font-cairo mt-0.5">اختر الخدمة المناسبة لأهدافك</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth scrollbar-hide snap-x snap-mandatory px-4 sm:px-6 lg:px-8">
               {allServices.map((product, idx) => {
                 const hasDiscount = product.compare_price !== null && product.compare_price > product.price;
                 return (
-                  <div key={product.id} className="bg-card border border-border hover:border-rose-200 rounded-2xl p-6 space-y-4 transition-all hover:shadow-sm">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-2xl">
+                  <div
+                    key={product.id}
+                    className="group flex-shrink-0 w-[260px] snap-start bg-card border border-border hover:border-rose-200 rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+                  >
+                    <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform duration-300">
                       {SERVICE_ICONS[idx % SERVICE_ICONS.length]}
                     </div>
-                    <div className="text-right space-y-1.5">
-                      <h3 className="text-sm font-bold text-foreground font-cairo line-clamp-1">{product.name}</h3>
+                    <div className="text-right space-y-1.5 flex-1">
+                      <h3 className="text-sm font-bold text-foreground font-cairo line-clamp-2 leading-snug">{product.name}</h3>
                       {product.short_description && (
-                        <p className="text-xs text-muted-foreground font-cairo line-clamp-2 leading-relaxed">{product.short_description}</p>
+                        <p className="text-xs text-muted-foreground font-cairo line-clamp-3 leading-relaxed">{product.short_description}</p>
                       )}
                     </div>
                     {(product as any).subscription_duration_value && (
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100 text-rose-700 text-[10px] font-bold font-cairo">
-                        <Calendar className="h-3 w-3" />
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100 text-rose-700 text-[10px] font-bold font-cairo w-fit">
+                        <Calendar className="h-3 w-3 flex-shrink-0" />
                         مدة: {(product as any).subscription_duration_value} جلسات
                       </div>
                     )}
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <Link href={`/store/${slug}/product/${product.slug}`} className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all font-cairo">
+                    <div className="flex items-center justify-between pt-3 border-t border-border mt-auto">
+                      <Link
+                        href={`/store/${slug}/product/${product.slug}`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all font-cairo"
+                      >
                         احجز الآن
                       </Link>
                       <div className="text-right space-y-0.5">
-                        <p className="text-lg font-black text-rose-600 font-cairo">
+                        <p className="text-base font-black text-rose-600 font-cairo">
                           {product.price.toLocaleString("ar-SA")} {store.currency}
                         </p>
                         {hasDiscount && (
@@ -192,6 +205,7 @@ export default function PersonalServicesTheme({ store, categories, products, set
                   </div>
                 );
               })}
+              <div className="flex-shrink-0 w-4 sm:w-6" aria-hidden="true" />
             </div>
           </div>
         </section>

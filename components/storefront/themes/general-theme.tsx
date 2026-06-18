@@ -165,7 +165,7 @@ export default function GeneralTheme({ store, categories, products, settings }: 
                 <h2 className="text-xl font-black text-foreground font-cairo">🔥 عروض اليوم</h2>
               </div>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {dealProducts.map((product) => {
                 const primaryImage =
                   product.product_images?.find((img) => img.is_primary)?.url ||
@@ -179,7 +179,7 @@ export default function GeneralTheme({ store, categories, products, settings }: 
                   <Link
                     key={product.id}
                     href={`/store/${slug}/product/${product.slug}`}
-                    className="flex-shrink-0 w-44 bg-card border border-border hover:border-emerald-200 rounded-xl p-3 space-y-2 transition-all hover:shadow-sm"
+                    className="w-full min-w-0 bg-card border border-border hover:border-emerald-200 rounded-xl p-3 space-y-2 transition-all hover:shadow-sm"
                   >
                     <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
                       {primaryImage ? (

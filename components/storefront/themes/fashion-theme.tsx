@@ -95,7 +95,7 @@ export default function FashionTheme({ store, categories, products, settings }: 
 
   const sectionRenderers: Partial<Record<SectionType, () => React.ReactNode>> = {
     hero: () => (
-      <section className="relative min-h-[85vh] flex items-end bg-slate-900 overflow-hidden">
+      <section className="relative min-h-[60vh] sm:min-h-[75vh] lg:min-h-[85vh] flex items-end bg-slate-900 overflow-hidden">
         {heroImage ? (
           <img
             src={heroImage}
@@ -110,7 +110,7 @@ export default function FashionTheme({ store, categories, products, settings }: 
           <span className="inline-block mb-5 text-[10px] font-black border border-rose-400/40 bg-rose-500/10 text-rose-300 px-4 py-1.5 rounded-full font-cairo">
             تشكيلة صيف 2026
           </span>
-          <h1 className="text-5xl sm:text-7xl font-black text-white leading-[1.05] max-w-2xl font-cairo mb-6">
+          <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.05] max-w-2xl font-cairo mb-6">
             {heroTitle}
           </h1>
           <p className="text-slate-300 text-sm sm:text-base max-w-lg leading-relaxed font-cairo mb-10">
@@ -156,7 +156,7 @@ export default function FashionTheme({ store, categories, products, settings }: 
             </Link>
             <h2 className="text-2xl font-black text-foreground font-cairo">وصل حديثاً</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
             {newArrivals.map((product) => (
               <FashionPortraitCard key={product.id} product={product} storeSlug={slug} currency={currency} />
             ))}
@@ -172,13 +172,13 @@ export default function FashionTheme({ store, categories, products, settings }: 
               <h2 className="text-2xl font-black text-foreground font-cairo">تسوقي حسب القسم</h2>
               <p className="text-xs text-muted-foreground font-cairo mt-1">اختاري تصنيفك المفضل</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {categories.slice(0, 4).map((cat, idx) => (
                 <Link
                   key={cat.id}
                   href={`/store/${slug}/category/${cat.slug}`}
                   className={`group relative overflow-hidden rounded-2xl bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-300 ${
-                    idx === 0 ? "row-span-1 md:row-span-2 aspect-[3/4] md:aspect-auto" : "aspect-square"
+                    idx === 0 ? "aspect-[3/4]" : "aspect-square"
                   }`}
                 >
                   {cat.image_url ? (
@@ -222,7 +222,7 @@ export default function FashionTheme({ store, categories, products, settings }: 
               <p className="text-xs text-muted-foreground font-cairo mt-0.5">التشكيلات التي تُحبّها العميلات أكثر</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
             {bestSellers.map((product) => {
               const primaryImage =
                 product.product_images?.find((img) => img.is_primary)?.url ||

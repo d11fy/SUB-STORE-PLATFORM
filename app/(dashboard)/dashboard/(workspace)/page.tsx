@@ -273,7 +273,7 @@ export default async function DashboardPage() {
             </Link>
             <h2 className="text-sm font-bold text-foreground font-cairo">ملخص المبيعات</h2>
           </div>
-          <div className="grid grid-cols-3 gap-3 text-right">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-right">
             <div className="space-y-1 p-3 bg-muted/50 rounded-xl border border-border">
               <p className="metric-value text-primary font-numbers">{ordersCount}</p>
               <p className="caption-text font-cairo">الطلبات الكلية</p>

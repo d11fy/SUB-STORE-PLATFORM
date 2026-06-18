@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Menu, LogOut, Settings, ExternalLink } from "lucide-react";
+import { Bell, LogOut, Settings, ExternalLink } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import { cn, getInitials } from "@/lib/utils";
 import type { Store as StoreType, User, Package as PackageType } from "@/lib/types/database";
@@ -8,17 +8,15 @@ import type { Store as StoreType, User, Package as PackageType } from "@/lib/typ
 interface DashboardHeaderProps {
   store: StoreType & { packages?: PackageType | null };
   user: User | null;
+  mobileMenuSlot?: React.ReactNode;
 }
 
-export function DashboardHeader({ store, user }: DashboardHeaderProps) {
+export function DashboardHeader({ store, user, mobileMenuSlot }: DashboardHeaderProps) {
   return (
-    <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-border bg-sidebar/50 backdrop-blur-sm sticky top-0 z-10">
-      {/* Left: Breadcrumb or title */}
-      <div className="flex items-center gap-3">
-        {/* Mobile menu button */}
-        <button className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors">
-          <Menu className="h-5 w-5" />
-        </button>
+    <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 border-b border-border bg-sidebar/50 backdrop-blur-sm sticky top-0 z-10">
+      {/* Left: Mobile menu + Breadcrumb */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {mobileMenuSlot}
         <div className="hidden sm:flex items-center gap-2">
           <span className="text-sm text-muted-foreground">متجر</span>
           <span className="text-muted-foreground">/</span>

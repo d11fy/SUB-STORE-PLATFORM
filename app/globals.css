@@ -171,6 +171,7 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
 
   body {
@@ -179,6 +180,7 @@
     font-family: "Cairo", "IBM Plex Sans Arabic", system-ui, sans-serif;
     line-height: 1.6;
     min-height: 100dvh;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -691,5 +693,19 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  /* ── HORIZONTAL MARQUEE STRIP ────────────────────────────── */
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  .animate-marquee {
+    animation: marquee 22s linear infinite;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  .marquee-pause:hover .animate-marquee {
+    animation-play-state: paused;
   }
 }

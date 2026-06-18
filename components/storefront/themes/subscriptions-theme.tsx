@@ -274,8 +274,8 @@ export default function SubscriptionsTheme({ store, products, settings }: Storef
             <h2 className="text-xl font-bold text-foreground font-cairo">مقارنة الباقات</h2>
             <p className="text-muted-foreground text-xs font-cairo">شفافية كاملة — تعرف بالضبط ما تحصل عليه في كل باقة</p>
           </div>
-          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full text-xs" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl overflow-x-auto shadow-sm">
+            <table className="w-full min-w-[420px] text-xs" dir="rtl">
               <thead>
                 <tr className="bg-muted border-b border-border">
                   <th className="p-4 text-right font-bold text-foreground font-cairo">الميزة</th>

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/header";
+import { MobileSidebarDrawer } from "@/components/dashboard/mobile-sidebar-drawer";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -48,13 +49,19 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-dvh bg-background flex">
-      {/* Sidebar */}
+      {/* Desktop Sidebar */}
       <DashboardSidebar store={store} user={profile} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <DashboardHeader store={store} user={profile} />
-        <main className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <DashboardHeader
+          store={store}
+          user={profile}
+          mobileMenuSlot={
+            <MobileSidebarDrawer store={store} user={profile} />
+          }
+        />
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 overflow-auto">
           {children}
         </main>
       </div>

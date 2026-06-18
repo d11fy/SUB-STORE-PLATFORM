@@ -321,10 +321,10 @@ export function ProductsClient({
       )}
 
       {/* Top Controls Bar */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 glass p-4 rounded-2xl">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 glass p-3 sm:p-4 rounded-2xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:flex-1">
           {/* Search */}
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1">
             <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -767,7 +767,7 @@ export function ProductsClient({
 
                 {editingProduct ? (
                   productImages.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {productImages.map((img) => (
                         <div key={img.id} className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
