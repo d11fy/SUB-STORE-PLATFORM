@@ -182,6 +182,8 @@ export function ProductsClient({
         compare_price: data.compare_price || null,
       };
 
+      console.log("[ProductForm] Submitting payload:", formattedData);
+
       let res;
       if (editingProduct) {
         res = await updateProduct(editingProduct.id, formattedData as any);
@@ -190,7 +192,8 @@ export function ProductsClient({
       }
 
       if (res.error) {
-        toast.error(res.error);
+        console.error("[ProductForm] Server returned error:", res.error);
+        toast.error(res.error, { duration: 8000 });
         return;
       }
 
@@ -198,8 +201,9 @@ export function ProductsClient({
       setModalOpen(false);
       reset();
       router.refresh();
-    } catch {
-      toast.error("حدث خطأ غير متوقع");
+    } catch (err) {
+      console.error("[ProductForm] Unexpected submit error:", err);
+      toast.error(`حدث خطأ غير متوقع: ${err instanceof Error ? err.message : String(err)}`, { duration: 8000 });
     }
   };
 

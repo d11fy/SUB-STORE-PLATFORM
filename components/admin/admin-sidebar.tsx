@@ -10,22 +10,26 @@ import {
   Crown,
   Sparkles,
   ChevronLeft,
+  TrendingUp,
+  ShieldAlert,
+  ScrollText,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types/database";
 
 const navItems = [
   {
-    group: "الإدارة العامة",
+    group: "عام",
     items: [
-      { label: "لوحة تحكم المنصة", href: "/admin", icon: LayoutDashboard },
+      { label: "نظرة عامة", href: "/admin", icon: LayoutDashboard },
     ],
   },
   {
     group: "إدارة المنصة",
     items: [
       { label: "المتاجر", href: "/admin/stores", icon: Store },
-      { label: "التجار", href: "/admin/merchants", icon: Users },
+      { label: "المستخدمون", href: "/admin/users", icon: Users },
     ],
   },
   {
@@ -36,9 +40,19 @@ const navItems = [
     ],
   },
   {
-    group: "أدوات متقدمة",
+    group: "التحليلات",
     items: [
-      { label: "أرصدة الذكاء الاصطناعي", href: "/admin/ai-credits", icon: Sparkles },
+      { label: "الإيرادات", href: "/admin/revenue", icon: TrendingUp },
+      { label: "أرصدة AI", href: "/admin/ai-credits", icon: Sparkles },
+      { label: "استخدام AI", href: "/admin/ai-usage", icon: Sparkles },
+    ],
+  },
+  {
+    group: "النظام",
+    items: [
+      { label: "مركز الأمان", href: "/admin/security", icon: ShieldAlert },
+      { label: "سجلات المنصة", href: "/admin/logs", icon: ScrollText },
+      { label: "إعدادات المنصة", href: "/admin/settings", icon: Settings },
     ],
   },
 ];
@@ -98,10 +112,10 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5 no-scrollbar">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4 no-scrollbar">
         {navItems.map((group) => (
           <div key={group.group}>
-            <p className="text-xs font-medium text-muted-foreground/60 px-2 mb-1.5 uppercase tracking-wider">
+            <p className="text-xs font-medium text-muted-foreground/50 px-2 mb-1 uppercase tracking-wider">
               {group.group}
             </p>
             <div className="space-y-0.5">

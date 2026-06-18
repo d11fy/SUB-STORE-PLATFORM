@@ -295,3 +295,372 @@ export async function addManualAiCredits(storeId: string, amount: number) {
   revalidatePath(`/admin/stores/${storeId}`);
   return { success: true };
 }
+
+// ============================================================
+// USERS MANAGEMENT
+// ============================================================
+export async function getAdminAllUsers(roleFilter?: string) {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("users")
+    .select(`*, stores!owner_id(id, status)`)
+    .order("created_at", { ascending: false });
+
+  if (roleFilter && roleFilter !== "all") {
+    query = query.eq("role", roleFilter as Database["public"]["Enums"]["user_role"]);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("getAdminAllUsers error:", error);
+    return [];
+  }
+  return data as any[];
+}
+
+export async function suspendMerchantStores(userId: string) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("stores")
+    .update({ status: "suspended" })
+    .eq("owner_id", userId)
+    .neq("status", "suspended");
+
+  if (error) throw new Error("فشل تعليق متاجر المستخدم");
+
+  await logAdminAction(adminId, "suspend_user_stores", `تم تعليق جميع متاجر المستخدم ${userId}`, undefined, { userId });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stores");
+  return { success: true };
+}
+
+export async function reactivateMerchantStores(userId: string) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("stores")
+    .update({ status: "active" })
+    .eq("owner_id", userId)
+    .eq("status", "suspended");
+
+  if (error) throw new Error("فشل تفعيل متاجر المستخدم");
+
+  await logAdminAction(adminId, "reactivate_user_stores", `تم إعادة تفعيل متاجر المستخدم ${userId}`, undefined, { userId });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stores");
+  return { success: true };
+}
+
+// ============================================================
+// REVENUE ANALYTICS
+// ============================================================
+export async function getRevenueOverview() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const [
+    { data: activeSubs },
+    { data: orderRevenue },
+    { data: monthlyOrders },
+  ] = await Promise.all([
+    // Active subscriptions joined with packages for MRR
+    supabase
+      .from("subscriptions")
+      .select("id, status, packages(price_monthly, name)")
+      .in("status", ["active", "trialing"]),
+    // All confirmed/completed order revenue
+    supabase
+      .from("orders")
+      .select("total_amount, created_at")
+      .in("status", ["تم_تأكيد_الدفع", "مكتمل", "تم_الشحن"]),
+    // Orders this month
+    supabase
+      .from("orders")
+      .select("total_amount, created_at")
+      .in("status", ["تم_تأكيد_الدفع", "مكتمل", "تم_الشحن"])
+      .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+  ]);
+
+  const mrr = (activeSubs ?? []).reduce((sum, sub) => {
+    const pkg = sub.packages as any;
+    return sum + (pkg?.price_monthly ?? 0);
+  }, 0);
+
+  const totalRevenue = (orderRevenue ?? []).reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+  const monthRevenue = (monthlyOrders ?? []).reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+
+  // Revenue by package
+  const revenueByPackage: Record<string, { name: string; count: number; mrr: number }> = {};
+  for (const sub of activeSubs ?? []) {
+    const pkg = sub.packages as any;
+    if (!pkg) continue;
+    if (!revenueByPackage[pkg.name]) {
+      revenueByPackage[pkg.name] = { name: pkg.name, count: 0, mrr: 0 };
+    }
+    revenueByPackage[pkg.name].count++;
+    revenueByPackage[pkg.name].mrr += pkg.price_monthly ?? 0;
+  }
+
+  return {
+    mrr,
+    arr: mrr * 12,
+    totalRevenue,
+    monthRevenue,
+    activeSubscriptions: activeSubs?.length ?? 0,
+    revenueByPackage: Object.values(revenueByPackage),
+  };
+}
+
+export async function getMonthlyRevenueTrend() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  // Last 6 months of order revenue
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const { data } = await supabase
+    .from("orders")
+    .select("total_amount, created_at")
+    .in("status", ["تم_تأكيد_الدفع", "مكتمل", "تم_الشحن"])
+    .gte("created_at", sixMonthsAgo.toISOString())
+    .order("created_at", { ascending: true });
+
+  // Group by month
+  const byMonth: Record<string, number> = {};
+  for (const order of data ?? []) {
+    const d = new Date(order.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    byMonth[key] = (byMonth[key] ?? 0) + (order.total_amount ?? 0);
+  }
+
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, revenue]) => ({ month, revenue }));
+}
+
+// ============================================================
+// AI USAGE MONITOR
+// ============================================================
+export async function getAiUsageOverview() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const [
+    { data: credits },
+    { data: generationsCount },
+    { data: typeBreakdown },
+  ] = await Promise.all([
+    supabase.from("ai_credits").select("credits_total, credits_used, stores(name, slug)").order("credits_used", { ascending: false }),
+    supabase.from("ai_generations").select("id", { count: "exact", head: true }),
+    supabase.from("ai_generations").select("type, credits_used"),
+  ]);
+
+  const totalCreditsUsed = (credits ?? []).reduce((sum, c) => sum + (c.credits_used ?? 0), 0);
+  const totalCreditsIssued = (credits ?? []).reduce((sum, c) => sum + (c.credits_total ?? 0), 0);
+
+  // By type
+  const byType: Record<string, number> = {};
+  for (const g of typeBreakdown ?? []) {
+    byType[g.type] = (byType[g.type] ?? 0) + (g.credits_used ?? 1);
+  }
+
+  return {
+    totalCreditsUsed,
+    totalCreditsIssued,
+    totalGenerations: (generationsCount as any)?.count ?? 0,
+    perStore: (credits ?? []).map((c) => ({
+      storeName: (c.stores as any)?.name ?? "—",
+      storeSlug: (c.stores as any)?.slug ?? "",
+      creditsUsed: c.credits_used,
+      creditsTotal: c.credits_total,
+    })),
+    byType: Object.entries(byType)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([type, count]) => ({ type, count })),
+  };
+}
+
+// ============================================================
+// PLATFORM SETTINGS (stored via admin_logs metadata)
+// ============================================================
+export async function getPlatformSettings(): Promise<Record<string, unknown>> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("admin_logs")
+    .select("metadata, created_at")
+    .eq("action", "platform_settings_update")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data?.metadata) {
+    return {
+      maintenance_mode: false,
+      freeze_registrations: false,
+      ai_features_enabled: true,
+      announcement: "",
+    };
+  }
+  return data.metadata as Record<string, unknown>;
+}
+
+export async function savePlatformSettings(settings: Record<string, unknown>) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  await supabase.from("admin_logs").insert({
+    admin_id: adminId,
+    action: "platform_settings_update",
+    description: "تم تحديث إعدادات المنصة",
+    metadata: settings as Record<string, unknown> as import("@/lib/types/database").Json,
+  });
+
+  revalidatePath("/admin/settings");
+  return { success: true };
+}
+
+// ============================================================
+// SECURITY CENTER
+// ============================================================
+export async function getSecurityOverview() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const [
+    { data: recentActions },
+    { count: suspendedStores },
+    { count: totalUsers },
+    { data: roleDistrib },
+  ] = await Promise.all([
+    supabase
+      .from("admin_logs")
+      .select("action, description, created_at, admin_id")
+      .in("action", ["update_store_status", "suspend_user_stores", "add_ai_credits", "platform_settings_update", "extend_trial"])
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("stores")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "suspended"),
+    supabase.from("users").select("*", { count: "exact", head: true }),
+    supabase.from("users").select("role"),
+  ]);
+
+  const roleCounts: Record<string, number> = {};
+  for (const u of roleDistrib ?? []) {
+    roleCounts[u.role] = (roleCounts[u.role] ?? 0) + 1;
+  }
+
+  return {
+    recentActions: recentActions ?? [],
+    suspendedStores: suspendedStores ?? 0,
+    totalUsers: totalUsers ?? 0,
+    roleCounts,
+  };
+}
+
+// ============================================================
+// PLATFORM AUDIT LOGS (paginated)
+// ============================================================
+const LOGS_PER_PAGE = 25;
+
+export async function getAdminLogsPage(page: number = 1, actionFilter?: string) {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const from = (page - 1) * LOGS_PER_PAGE;
+  const to = from + LOGS_PER_PAGE - 1;
+
+  let query = supabase
+    .from("admin_logs")
+    .select("*, users!admin_id(full_name, email)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (actionFilter && actionFilter !== "all") {
+    query = query.eq("action", actionFilter);
+  }
+
+  const { data, count, error } = await query;
+  if (error) {
+    console.error("getAdminLogsPage error:", error);
+    return { logs: [], total: 0, totalPages: 0 };
+  }
+
+  return {
+    logs: (data ?? []) as any[],
+    total: count ?? 0,
+    totalPages: Math.ceil((count ?? 0) / LOGS_PER_PAGE),
+  };
+}
+
+export async function getLogActionTypes() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { data } = await supabase.from("admin_logs").select("action");
+  const unique = [...new Set((data ?? []).map((d) => d.action))].sort();
+  return unique;
+}
+
+// ============================================================
+// ENHANCED DASHBOARD STATS
+// ============================================================
+export async function getEnhancedDashboardStats() {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const [
+    { count: storesCount },
+    { count: activeStoresCount },
+    { count: merchantsCount },
+    { count: ordersCount },
+    { count: subscriptionsCount },
+    { data: activeSubs },
+    { data: recentOrders },
+    { data: recentLogs },
+  ] = await Promise.all([
+    supabase.from("stores").select("*", { count: "exact", head: true }),
+    supabase.from("stores").select("*", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "merchant"),
+    supabase.from("orders").select("*", { count: "exact", head: true }),
+    supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("subscriptions").select("packages(price_monthly)").in("status", ["active", "trialing"]),
+    supabase
+      .from("orders")
+      .select("total_amount, created_at, store_id, stores(name)")
+      .in("status", ["تم_تأكيد_الدفع", "مكتمل", "تم_الشحن"])
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("admin_logs")
+      .select("action, description, created_at")
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  const totalSales = (recentOrders ?? []).reduce((acc: number, o: any) => acc + (o.total_amount ?? 0), 0);
+  const mrr = (activeSubs ?? []).reduce((sum: number, sub: any) => sum + (sub.packages?.price_monthly ?? 0), 0);
+
+  return {
+    storesCount: storesCount ?? 0,
+    activeStoresCount: activeStoresCount ?? 0,
+    merchantsCount: merchantsCount ?? 0,
+    ordersCount: ordersCount ?? 0,
+    subscriptionsCount: subscriptionsCount ?? 0,
+    totalSales,
+    mrr,
+    arr: mrr * 12,
+    recentOrders: (recentOrders ?? []) as any[],
+    recentLogs: (recentLogs ?? []) as any[],
+  };
+}

@@ -62,16 +62,32 @@ export async function getProducts(options?: {
 export async function createProduct(
   formData: ProductInput
 ): Promise<{ data: Product | null; error: string | null }> {
-  try {
-    const validated = productSchema.safeParse(formData);
-    if (!validated.success) {
-      return { data: null, error: validated.error.issues[0]?.message ?? "بيانات غير صالحة" };
-    }
+  // ── Step 1: Validate with Zod — log ALL issues, not just the first ──
+  const validated = productSchema.safeParse(formData);
+  if (!validated.success) {
+    const issues = validated.error.issues.map((i) => `[${i.path.join(".")}] ${i.message}`);
+    console.error("[createProduct] Zod validation failed:", issues);
+    return {
+      data: null,
+      error: issues[0] ?? "بيانات غير صالحة",
+    };
+  }
 
-    const store = await getMerchantStoreWithPackage();
+  // ── Step 2: Auth + store lookup — outside try so redirect() can propagate ──
+  let store: Awaited<ReturnType<typeof getMerchantStoreWithPackage>>;
+  try {
+    store = await getMerchantStoreWithPackage();
+  } catch (err: any) {
+    // Rethrow Next.js redirect errors — they must not be swallowed
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    console.error("[createProduct] getMerchantStoreWithPackage failed:", err?.message ?? err);
+    return { data: null, error: "تعذّر التحقق من هوية المتجر — تأكد من تسجيل دخولك" };
+  }
+
+  try {
     const supabase = await createClient();
 
-    // Check package limit
+    // ── Step 3: Package product limit check ──
     const maxProducts = store.packages?.max_products ?? null;
     if (maxProducts !== null) {
       const { count, error: countError } = await supabase
@@ -79,7 +95,10 @@ export async function createProduct(
         .select("id", { count: "exact", head: true })
         .eq("store_id", store.id);
 
-      if (countError) throw countError;
+      if (countError) {
+        console.error("[createProduct] Count query error:", countError);
+        throw countError;
+      }
 
       const currentCount = count ?? 0;
       if (currentCount >= maxProducts) {
@@ -90,7 +109,7 @@ export async function createProduct(
       }
     }
 
-    // Verify slug unique per store_id
+    // ── Step 4: Slug uniqueness check ──
     const { data: existingSlug } = await supabase
       .from("products")
       .select("id")
@@ -105,43 +124,80 @@ export async function createProduct(
       };
     }
 
-    // Insert product
+    // ── Step 5: Build insert payload + debug log ──
+    const insertPayload = {
+      store_id: store.id,
+      name: validated.data.name,
+      slug: validated.data.slug,
+      description: validated.data.description ?? null,
+      short_description: validated.data.short_description ?? null,
+      price: validated.data.price,
+      compare_price: typeof validated.data.compare_price === "number" ? validated.data.compare_price : null,
+      sku: validated.data.sku ?? null,
+      stock_quantity: validated.data.stock_quantity,
+      category_id: validated.data.category_id || null,
+      is_active: validated.data.is_active,
+      is_featured: validated.data.is_featured,
+      barcode: null,
+      track_inventory: true,
+      is_digital: validated.data.product_type === "digital",
+      product_type: validated.data.product_type,
+      subscription_duration_value: validated.data.subscription_duration_value ?? null,
+      subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
+      weight: null,
+      tags: [] as string[],
+      attributes: {} as Record<string, unknown>,
+    };
+
+    console.log("[createProduct] INSERT payload:", JSON.stringify(insertPayload, null, 2));
+
+    // ── Step 6: DB insert ──
     const { data: product, error: insertError } = await supabase
       .from("products")
-      .insert({
-        store_id: store.id,
-        name: validated.data.name,
-        slug: validated.data.slug,
-        description: validated.data.description ?? null,
-        short_description: validated.data.short_description ?? null,
-        price: validated.data.price,
-        compare_price: typeof validated.data.compare_price === "number" ? validated.data.compare_price : null,
-        sku: validated.data.sku ?? null,
-        stock_quantity: validated.data.stock_quantity,
-        category_id: validated.data.category_id || null,
-        is_active: validated.data.is_active,
-        is_featured: validated.data.is_featured,
-        barcode: null,
-        track_inventory: true,
-        is_digital: validated.data.product_type === "digital",
-        product_type: validated.data.product_type,
-        subscription_duration_value: validated.data.subscription_duration_value ?? null,
-        subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
-        weight: null,
-        tags: [],
-        attributes: {},
-      } as any)
+      .insert(insertPayload as any)
       .select()
       .single();
 
-    if (insertError || !product) throw insertError;
+    if (insertError) {
+      console.error("[createProduct] DB insert error:", {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+      });
+      // Translate common Postgres error codes to Arabic
+      if (insertError.code === "23505") {
+        return { data: null, error: "رابط المنتج مكرر — يرجى تغيير الـ slug" };
+      }
+      if (insertError.code === "23503") {
+        return { data: null, error: `قيمة مرجعية غير صالحة — تحقق من التصنيف المختار (FK: ${insertError.details})` };
+      }
+      if (insertError.code === "22P02") {
+        return { data: null, error: `قيمة enum غير مقبولة — تحقق من نوع المنتج (${insertError.message})` };
+      }
+      if (insertError.code === "42501") {
+        return { data: null, error: "تم رفض العملية بسبب قواعد الأمان (RLS) — تحقق من سياسات Supabase" };
+      }
+      return { data: null, error: `خطأ في قاعدة البيانات [${insertError.code ?? "?"}]: ${insertError.message}` };
+    }
+
+    if (!product) {
+      console.error("[createProduct] Insert returned no data (RLS may be blocking SELECT after INSERT). store_id:", store.id);
+      return {
+        data: null,
+        error: "تم إنشاء المنتج لكن تعذّرت قراءته — تحقق من سياسة RLS على جدول products",
+      };
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/products");
     return { data: product as any, error: null };
   } catch (err: any) {
-    console.error("Error creating product:", err);
-    return { data: null, error: "فشل إضافة المنتج، يرجى المحاولة لاحقاً" };
+    // Rethrow Next.js redirect errors
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    const message = err?.message ?? String(err) ?? "خطأ غير معروف";
+    console.error("[createProduct] Unexpected error:", { message, code: err?.code, err });
+    return { data: null, error: `خطأ غير متوقع أثناء إضافة المنتج: ${message}` };
   }
 }
 
@@ -152,16 +208,28 @@ export async function updateProduct(
   productId: string,
   formData: ProductInput
 ): Promise<{ data: Product | null; error: string | null }> {
-  try {
-    const validated = productSchema.safeParse(formData);
-    if (!validated.success) {
-      return { data: null, error: validated.error.issues[0]?.message ?? "بيانات غير صالحة" };
-    }
+  // ── Step 1: Validate ──
+  const validated = productSchema.safeParse(formData);
+  if (!validated.success) {
+    const issues = validated.error.issues.map((i) => `[${i.path.join(".")}] ${i.message}`);
+    console.error("[updateProduct] Zod validation failed:", issues);
+    return { data: null, error: issues[0] ?? "بيانات غير صالحة" };
+  }
 
-    const storeId = await getMerchantStoreId();
+  // ── Step 2: Auth outside try so redirect() can propagate ──
+  let storeId: string;
+  try {
+    storeId = await getMerchantStoreId();
+  } catch (err: any) {
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    console.error("[updateProduct] getMerchantStoreId failed:", err?.message ?? err);
+    return { data: null, error: "تعذّر التحقق من هوية المتجر" };
+  }
+
+  try {
     const supabase = await createClient();
 
-    // Verify product belongs to store
+    // Verify product belongs to this store
     const { data: existingProduct, error: fetchError } = await supabase
       .from("products")
       .select("id")
@@ -169,11 +237,15 @@ export async function updateProduct(
       .eq("id", productId)
       .maybeSingle();
 
-    if (fetchError || !existingProduct) {
+    if (fetchError) {
+      console.error("[updateProduct] Ownership check error:", fetchError);
+      return { data: null, error: `خطأ في التحقق من المنتج: ${fetchError.message}` };
+    }
+    if (!existingProduct) {
       return { data: null, error: "المنتج غير موجود أو لا تملك صلاحية تعديله" };
     }
 
-    // Verify slug unique if changed
+    // Slug uniqueness
     const { data: existingSlug } = await supabase
       .from("products")
       .select("id")
@@ -183,45 +255,62 @@ export async function updateProduct(
       .maybeSingle();
 
     if (existingSlug) {
-      return {
-        data: null,
-        error: "رابط المنتج (slug) مستخدم بالفعل في متجرك، يرجى اختيار رابط آخر.",
-      };
+      return { data: null, error: "رابط المنتج (slug) مستخدم بالفعل في متجرك، يرجى اختيار رابط آخر." };
     }
 
-    // Update product
+    const updatePayload = {
+      name: validated.data.name,
+      slug: validated.data.slug,
+      description: validated.data.description ?? null,
+      short_description: validated.data.short_description ?? null,
+      price: validated.data.price,
+      compare_price: typeof validated.data.compare_price === "number" ? validated.data.compare_price : null,
+      sku: validated.data.sku ?? null,
+      stock_quantity: validated.data.stock_quantity,
+      category_id: validated.data.category_id || null,
+      is_active: validated.data.is_active,
+      is_featured: validated.data.is_featured,
+      is_digital: validated.data.product_type === "digital",
+      product_type: validated.data.product_type,
+      subscription_duration_value: validated.data.subscription_duration_value ?? null,
+      subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
+    };
+
+    console.log("[updateProduct] UPDATE payload for", productId, ":", JSON.stringify(updatePayload, null, 2));
+
     const { data: product, error: updateError } = await supabase
       .from("products")
-      .update({
-        name: validated.data.name,
-        slug: validated.data.slug,
-        description: validated.data.description ?? null,
-        short_description: validated.data.short_description ?? null,
-        price: validated.data.price,
-        compare_price: typeof validated.data.compare_price === "number" ? validated.data.compare_price : null,
-        sku: validated.data.sku ?? null,
-        stock_quantity: validated.data.stock_quantity,
-        category_id: validated.data.category_id || null,
-        is_active: validated.data.is_active,
-        is_featured: validated.data.is_featured,
-        is_digital: validated.data.product_type === "digital",
-        product_type: validated.data.product_type,
-        subscription_duration_value: validated.data.subscription_duration_value ?? null,
-        subscription_duration_unit: validated.data.subscription_duration_unit ?? null,
-      } as any)
+      .update(updatePayload as any)
       .eq("id", productId)
       .eq("store_id", storeId)
       .select()
       .single();
 
-    if (updateError || !product) throw updateError;
+    if (updateError) {
+      console.error("[updateProduct] DB update error:", {
+        code: updateError.code,
+        message: updateError.message,
+        details: updateError.details,
+        hint: updateError.hint,
+      });
+      if (updateError.code === "23505") return { data: null, error: "رابط المنتج مكرر — يرجى تغيير الـ slug" };
+      if (updateError.code === "42501") return { data: null, error: "تم رفض العملية بسبب قواعد الأمان (RLS)" };
+      return { data: null, error: `خطأ في قاعدة البيانات [${updateError.code ?? "?"}]: ${updateError.message}` };
+    }
+
+    if (!product) {
+      console.error("[updateProduct] Update returned no data. productId:", productId, "storeId:", storeId);
+      return { data: null, error: "تم التحديث لكن تعذّرت قراءة المنتج — تحقق من سياسة RLS" };
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/products");
     return { data: product as any, error: null };
   } catch (err: any) {
-    console.error("Error updating product:", err);
-    return { data: null, error: "فشل تعديل المنتج، يرجى المحاولة لاحقاً" };
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    const message = err?.message ?? String(err) ?? "خطأ غير معروف";
+    console.error("[updateProduct] Unexpected error:", { message, err });
+    return { data: null, error: `خطأ غير متوقع أثناء تعديل المنتج: ${message}` };
   }
 }
 
