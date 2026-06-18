@@ -33,6 +33,54 @@ function isAdminRoute(pathname: string): boolean {
 // PROXY (Next.js 16 Middleware)
 // ============================================================
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // ============================================================
+  // CUSTOM DOMAIN ROUTING
+  // Rewrite verified custom domains to /store/[slug] transparently
+  // ============================================================
+  const hostname = request.headers.get("host") ?? "";
+  const isKnownHost =
+    hostname.includes("localhost") ||
+    hostname.includes("127.0.0.1") ||
+    hostname.includes("vercel.app") ||
+    hostname.endsWith(".sabastore.com") ||
+    hostname === "sabastore.com";
+
+  if (
+    !isKnownHost &&
+    !pathname.startsWith("/store/") &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next/") &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    const adminSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { cookies: { getAll: () => [], setAll: () => {} } }
+    );
+
+    const { data: domainRow } = await adminSupabase
+      .from("domains")
+      .select("store_id, stores(slug)")
+      .eq("domain", hostname)
+      .eq("is_verified", true)
+      .maybeSingle();
+
+    if (domainRow?.stores) {
+      const storeRecord = domainRow.stores as unknown as { slug: string } | { slug: string }[];
+      const storeSlug = Array.isArray(storeRecord) ? storeRecord[0]?.slug : storeRecord.slug;
+      if (storeSlug) {
+        const url = request.nextUrl.clone();
+        url.pathname = `/store/${storeSlug}${pathname === "/" ? "" : pathname}`;
+        return NextResponse.rewrite(url);
+      }
+    }
+  }
+
+  // ============================================================
+  // SESSION REFRESH
+  // ============================================================
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -61,8 +109,6 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
 
   // ============================================================
   // AUTH CHECKS
