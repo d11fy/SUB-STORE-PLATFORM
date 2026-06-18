@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Menu, X, LayoutDashboard, Package, Tag, ShoppingBag, CreditCard,
   Truck, Palette, Sparkles, Settings, Globe, Crown, FileText,
-  Store, ChevronLeft, Bell,
+  Store, ChevronLeft, Bell, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Store as StoreType, User, Package as PackageType, Subscription } from "@/lib/types/database";
@@ -25,6 +25,7 @@ const navItems = [
       { label: "المنتجات", href: "/dashboard/products", icon: Package },
       { label: "التصنيفات", href: "/dashboard/categories", icon: Tag },
       { label: "الطلبات", href: "/dashboard/orders", icon: ShoppingBag },
+      { label: "العملاء", href: "/dashboard/customers", icon: Users },
       { label: "الصفحات", href: "/dashboard/pages", icon: FileText },
     ],
   },
@@ -41,6 +42,7 @@ const navItems = [
     group: "الحساب",
     items: [
       { label: "إعدادات المتجر", href: "/dashboard/settings", icon: Settings },
+      { label: "النطاق المخصص", href: "/dashboard/domain", icon: Globe },
       { label: "الاشتراك", href: "/dashboard/subscription", icon: Crown },
     ],
   },
