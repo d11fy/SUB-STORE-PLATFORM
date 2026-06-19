@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMerchantStoreId, getMerchantStoreWithPackage } from "./store-utils";
 import { productSchema, type ProductInput } from "@/lib/validations/product";
+import { logger } from "@/lib/monitoring/logger";
 import type { Product } from "@/lib/types/database";
 
 // ============================================================
@@ -159,6 +160,7 @@ export async function createProduct(
       .single();
 
     if (insertError) {
+      logger.actionError("createProduct", insertError, { storeId: store.id });
       console.error("[createProduct] DB insert error:", {
         code: insertError.code,
         message: insertError.message,

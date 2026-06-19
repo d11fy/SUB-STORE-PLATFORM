@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
+import { logger } from "@/lib/monitoring/logger";
 import type { Order, OrderItem } from "@/lib/types/database";
 
 // Interface for checkout cart items passed from Zustand
@@ -305,7 +306,7 @@ export async function createCustomerOrder(
     .single();
 
   if (orderInsertError || !order) {
-    console.error("Order creation error:", orderInsertError);
+    logger.actionError("createCustomerOrder", orderInsertError ?? new Error("no order returned"), { storeId: store.id });
     return { success: false, orderId: null, orderNumber: null, error: "فشل إنشاء الطلب، يرجى المحاولة مرة أخرى" };
   }
 

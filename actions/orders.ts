@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMerchantStoreId } from "./store-utils";
+import { logger } from "@/lib/monitoring/logger";
 import type { Order, OrderItem, PaymentProof, OrderStatus } from "@/lib/types/database";
 
 // Return type interface
@@ -67,7 +68,7 @@ export async function getMerchantOrders(options?: {
     const result = (data as any[]).map((o) => ({ ...o, shipping_methods: null }));
     return { data: result, error: null };
   } catch (err: any) {
-    console.error("Error fetching merchant orders:", err);
+    logger.actionError("getMerchantOrders", err, { storeId });
     return { data: null, error: "فشل جلب الطلبات" };
   }
 }

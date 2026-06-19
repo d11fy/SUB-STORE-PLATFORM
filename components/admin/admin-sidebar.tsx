@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   ScrollText,
   Settings,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types/database";
@@ -50,6 +51,7 @@ const navItems = [
   {
     group: "النظام",
     items: [
+      { label: "مراقبة المنصة", href: "/admin/monitoring", icon: Activity },
       { label: "مركز الأمان", href: "/admin/security", icon: ShieldAlert },
       { label: "سجلات المنصة", href: "/admin/logs", icon: ScrollText },
       { label: "إعدادات المنصة", href: "/admin/settings", icon: Settings },

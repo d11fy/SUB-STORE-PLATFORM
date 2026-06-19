@@ -6,6 +6,9 @@ import { ProductDetailClient } from "./product-detail-client";
 import { ProductCard } from "../../components/product-card";
 import type { Metadata } from "next";
 
+// Product pages are public — cache with short revalidation
+export const revalidate = 60;
+
 interface ProductPageProps {
   params: Promise<{ slug: string; productSlug: string }>;
 }

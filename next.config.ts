@@ -21,10 +21,37 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
   },
   async headers() {
+    const supabaseHost = "*.supabase.co *.supabase.in";
+    const csp = [
+      "default-src 'self'",
+      // Next.js injects inline scripts; unsafe-eval is needed for dev HMR
+      `script-src 'self' 'unsafe-inline' 'unsafe-eval'`,
+      // Tailwind v4 + Next.js both generate inline styles at runtime
+      `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+      // Cairo font from Google Fonts
+      `font-src 'self' https://fonts.gstatic.com`,
+      // Supabase storage + external product images via <Image>
+      `img-src 'self' data: blob: https://${supabaseHost}`,
+      // Supabase REST + Auth + Realtime WebSocket
+      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost}`,
+      // No iframes anywhere (belt+suspenders with X-Frame-Options)
+      `frame-ancestors 'none'`,
+      // Forms only post to same origin
+      `form-action 'self'`,
+      // Block <base> tag hijacking
+      `base-uri 'self'`,
+      // Block object/embed elements
+      `object-src 'none'`,
+    ].join("; ");
+
     return [
       {
         source: "/(.*)",
         headers: [
+          {
+            key: "Content-Security-Policy",
+            value: csp,
+          },
           {
             key: "X-Frame-Options",
             value: "DENY",
@@ -44,6 +71,10 @@ const nextConfig: NextConfig = {
           {
             key: "X-DNS-Prefetch-Control",
             value: "on",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
           },
         ],
       },

@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { ProductsClient } from "./products-client";
 import type { Metadata } from "next";
 
+// Revalidate public product listing every 60 seconds (ISR)
+export const revalidate = 60;
+
 interface ProductsPageProps {
   params: Promise<{ slug: string }>;
 }
