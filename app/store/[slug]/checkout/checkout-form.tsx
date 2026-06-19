@@ -72,7 +72,7 @@ export function CheckoutForm({
   const subtotal = getCartTotal();
 
   // Pick first active method as default
-  const defaultShipping = shippingMethods[0]?.id ?? "";
+  const defaultShipping = requiresShipping ? (shippingMethods[0]?.id ?? "") : "";
   const defaultPayment = paymentMethods[0]?.id ?? "";
 
   const {
@@ -84,8 +84,10 @@ export function CheckoutForm({
   } = useForm<CheckoutInput>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
-      country: "PS",
-      city: "القدس",
+      // Delivery fields populated only for physical stores
+      country: requiresShipping ? "PS" : "",
+      city: requiresShipping ? "القدس" : "",
+      address: "",
       shipping_method_id: defaultShipping,
       payment_method_id: defaultPayment,
     },
@@ -100,18 +102,19 @@ export function CheckoutForm({
     setMounted(true);
   }, []);
 
-  // Set default city when country changes
+  // Set default city when country changes — physical stores only
   useEffect(() => {
+    if (!requiresShipping) return;
     if (selectedCountry === "PS") {
       setValue("city", PALESTINE_CITIES[0]);
     } else {
       setValue("city", JORDAN_CITIES[0]);
     }
-  }, [selectedCountry, setValue]);
+  }, [selectedCountry, setValue, requiresShipping]);
 
   // Recalculate shipping cost when shipping method, country, or city changes
   useEffect(() => {
-    if (!mounted || items.length === 0 || !selectedShipping) return;
+    if (!requiresShipping || !mounted || items.length === 0 || !selectedShipping) return;
 
     async function updateCalculations() {
       setCalcLoading(true);
@@ -126,7 +129,7 @@ export function CheckoutForm({
             sale_price: i.sale_price,
             quantity: i.quantity,
           })),
-          selectedCity,
+          selectedCity ?? "",
           selectedShipping ?? ""
         );
 
@@ -143,7 +146,7 @@ export function CheckoutForm({
     }
 
     updateCalculations();
-  }, [selectedCity, selectedShipping, storeSlug, items, mounted]);
+  }, [selectedCity, selectedShipping, storeSlug, items, mounted, requiresShipping]);
 
   if (!mounted) {
     return (
@@ -284,35 +287,73 @@ export function CheckoutForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Country */}
-            <div className="form-group space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">الدولة <span className="text-destructive">*</span></label>
-              <select
-                className="w-full px-4 py-3 rounded-xl bg-input border border-border hover:border-primary/30 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right cursor-pointer"
-                {...register("country")}
-              >
-                <option value="PS">فلسطين 🇵🇸</option>
-                <option value="JO">الأردن 🇯🇴</option>
-              </select>
-            </div>
+          {/* Delivery location — physical stores only */}
+          {requiresShipping && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Country */}
+                <div className="form-group space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">الدولة <span className="text-destructive">*</span></label>
+                  <select
+                    className="w-full px-4 py-3 rounded-xl bg-input border border-border hover:border-primary/30 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right cursor-pointer"
+                    {...register("country")}
+                  >
+                    <option value="PS">فلسطين 🇵🇸</option>
+                    <option value="JO">الأردن 🇯🇴</option>
+                  </select>
+                </div>
 
-            {/* City */}
-            <div className="form-group space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">المدينة / المحافظة <span className="text-destructive">*</span></label>
-              <select
-                className="w-full px-4 py-3 rounded-xl bg-input border border-border hover:border-primary/30 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right cursor-pointer"
-                {...register("city")}
-              >
-                {citiesList.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {/* City */}
+                <div className="form-group space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">المدينة / المحافظة <span className="text-destructive">*</span></label>
+                  <select
+                    className="w-full px-4 py-3 rounded-xl bg-input border border-border hover:border-primary/30 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right cursor-pointer"
+                    {...register("city")}
+                  >
+                    {citiesList.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Email */}
+                {/* Email */}
+                <div className="form-group space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">البريد الإلكتروني <span className="text-muted-foreground/60">(اختياري)</span></label>
+                  <input
+                    type="email"
+                    placeholder="example@mail.com"
+                    dir="ltr"
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl bg-input border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-left",
+                      errors.email ? "border-destructive" : "border-border hover:border-primary/30"
+                    )}
+                    {...register("email")}
+                  />
+                  {errors.email && <p className="text-destructive text-[10px] text-right">{errors.email.message}</p>}
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="form-group space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">العنوان التفصيلي <span className="text-destructive">*</span></label>
+                <input
+                  type="text"
+                  placeholder="مثال: الشارع الرئيسي، بجانب البنك الوطني، الطابق الثاني"
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl bg-input border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right",
+                    errors.address ? "border-destructive" : "border-border hover:border-primary/30"
+                  )}
+                  {...register("address")}
+                />
+                {errors.address && <p className="text-destructive text-[10px]">{errors.address.message}</p>}
+              </div>
+            </>
+          )}
+
+          {/* Email — shown for digital stores outside the delivery block */}
+          {!requiresShipping && (
             <div className="form-group space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">البريد الإلكتروني <span className="text-muted-foreground/60">(اختياري)</span></label>
               <input
@@ -327,22 +368,7 @@ export function CheckoutForm({
               />
               {errors.email && <p className="text-destructive text-[10px] text-right">{errors.email.message}</p>}
             </div>
-          </div>
-
-          {/* Address */}
-          <div className="form-group space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">العنوان التفصيلي <span className="text-destructive">*</span></label>
-            <input
-              type="text"
-              placeholder="مثال: الشارع الرئيسي، بجانب البنك الوطني، الطابق الثاني"
-              className={cn(
-                "w-full px-4 py-3 rounded-xl bg-input border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right",
-                errors.address ? "border-destructive" : "border-border hover:border-primary/30"
-              )}
-              {...register("address")}
-            />
-            {errors.address && <p className="text-destructive text-[10px]">{errors.address.message}</p>}
-          </div>
+          )}
 
           {/* Notes */}
           <div className="form-group space-y-1.5">
@@ -558,16 +584,18 @@ export function CheckoutForm({
               <span className="text-muted-foreground">تكلفة المنتجات</span>
               <span className="font-bold text-foreground font-numbers">{formatCurrency(subtotal, currency)}</span>
             </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground">رسوم التوصيل</span>
-              {calcLoading ? (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-              ) : (
-                <span className="font-bold text-foreground font-numbers">
-                  {formatCurrency(finalShippingCost, currency)}
-                </span>
-              )}
-            </div>
+            {requiresShipping && (
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">رسوم التوصيل</span>
+                {calcLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                ) : (
+                  <span className="font-bold text-foreground font-numbers">
+                    {formatCurrency(finalShippingCost, currency)}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="border-t border-border pt-4 flex justify-between items-center">
               <span className="font-bold text-foreground text-sm">المجموع الكلي</span>

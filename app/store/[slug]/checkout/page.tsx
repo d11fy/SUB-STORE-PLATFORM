@@ -20,10 +20,10 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { slug } = await params;
   const supabase = createAdminClient();
 
-  // Fetch store
+  // Fetch store — includes settings JSONB for shipping_enabled flag
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, currency, requires_shipping")
+    .select("id, currency, requires_shipping, settings")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -32,9 +32,12 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
     notFound();
   }
 
-  const requiresShipping = store.requires_shipping ?? true;
+  // shipping_enabled in settings JSONB overrides the DB column when explicitly set to false
+  const storeSettings = (store.settings as any) ?? {};
+  const requiresShipping =
+    (store.requires_shipping ?? true) && storeSettings.shipping_enabled !== false;
 
-  // Fetch active shipping methods
+  // Fetch active shipping methods (only needed for physical stores)
   const { data: shippingMethods } = await supabase
     .from("shipping_methods")
     .select("*")
@@ -55,7 +58,11 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
       {/* Title */}
       <div className="text-right">
         <h1 className="text-2xl font-black text-foreground">إتمام عملية الشراء</h1>
-        <p className="text-xs text-muted-foreground mt-1">الرجاء ملء معلوماتك للتوصيل واختيار طريقة الدفع المناسبة</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {requiresShipping
+            ? "الرجاء ملء معلوماتك للتوصيل واختيار طريقة الدفع المناسبة"
+            : "الرجاء إدخال معلوماتك واختيار طريقة الدفع المناسبة لإتمام الطلب"}
+        </p>
       </div>
 
       <CheckoutForm

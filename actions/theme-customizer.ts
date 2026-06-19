@@ -249,23 +249,17 @@ export async function discardThemeDraftAction(): Promise<{
 }
 
 // ── 4. Update Sections Config (direct live) ──────────────────
-// Used for quick reorder/toggle without going through draft
+// Used for quick reorder/toggle without going through draft.
+// Only Zod schema validity is required here — theme-level constraint
+// rules (e.g. product sections blocked on subscription themes) are
+// enforced at publish time, not on every quick save. This lets merchants
+// arrange their sections freely in the customizer without being blocked.
 export async function updateSectionsConfigAction(
   sections: SectionConfig[]
 ): Promise<{ success: boolean; error: string | null }> {
   try {
     const storeId = await getMerchantStoreId();
     const { rowId, extended } = await readSettings(storeId);
-
-    // D3.6: Validate sections against platform constraints
-    const activeThemeSlug = await getActiveThemeSlug(storeId);
-    const sectionsCheck = validateD1SectionsConstraints(sections, activeThemeSlug);
-    if (!sectionsCheck.valid) {
-      return {
-        success: false,
-        error: "تعذّر تحديث الأقسام — مخالفة قواعد المنصة: " + sectionsCheck.violations[0],
-      };
-    }
 
     const nextSettings: ExtendedThemeSettings = {
       ...extended,

@@ -63,6 +63,11 @@ export async function validateAndCalculateOrder(
     subtotal += price * item.quantity;
   }
 
+  // Digital stores / no shipping: skip shipping lookup entirely
+  if (!shippingMethodId || shippingMethodId === "") {
+    return { subtotal, shippingCost: 0, total: subtotal, error: null };
+  }
+
   // Fetch shipping method
   const { data: method, error: methodError } = await supabase
     .from("shipping_methods")
@@ -130,7 +135,7 @@ export async function createCustomerOrder(
   // 1. Fetch store
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, status")
+    .select("id, status, requires_shipping")
     .eq("slug", storeSlug)
     .single();
 
@@ -141,6 +146,22 @@ export async function createCustomerOrder(
   if (store.status !== "active" && store.status !== "trial") {
     return { success: false, orderId: null, orderNumber: null, error: "المتجر غير نشط حالياً" };
   }
+
+  const storeRequiresShipping = store.requires_shipping ?? true;
+
+  // Validate delivery fields only when store requires shipping
+  if (storeRequiresShipping) {
+    if (!validated.data.city?.trim()) {
+      return { success: false, orderId: null, orderNumber: null, error: "يرجى تحديد المدينة" };
+    }
+    if (!validated.data.address?.trim() || validated.data.address.trim().length < 5) {
+      return { success: false, orderId: null, orderNumber: null, error: "يرجى ملء العنوان التفصيلي (5 أحرف على الأقل)" };
+    }
+  }
+
+  // Normalize delivery fields — guaranteed strings for DB inserts + shipping zone queries
+  const deliveryCity = validated.data.city?.trim() ?? "";
+  const deliveryAddress = validated.data.address?.trim() ?? "";
 
   // 2. Calculate subtotal & check inventory
   let subtotal = 0;
@@ -202,7 +223,7 @@ export async function createCustomerOrder(
         .from("shipping_zones")
         .select("price")
         .eq("shipping_method_id", shippingMethod.id)
-        .eq("city_name", validated.data.city)
+        .eq("city_name", deliveryCity)
         .eq("is_active", true)
         .maybeSingle();
 
@@ -246,10 +267,9 @@ export async function createCustomerOrder(
       .update({
         orders_count: existingCustomer.orders_count + 1,
         total_spent: existingCustomer.total_spent + totalAmount,
-        full_name: validated.data.full_name, // update name/details if changed
+        full_name: validated.data.full_name,
         email: validated.data.email || null,
-        city: validated.data.city,
-        address: validated.data.address,
+        ...(storeRequiresShipping ? { city: deliveryCity, address: deliveryAddress } : {}),
       })
       .eq("id", customerId);
   } else {
@@ -260,8 +280,8 @@ export async function createCustomerOrder(
         full_name: validated.data.full_name,
         email: validated.data.email || null,
         phone: cleanPhone,
-        city: validated.data.city,
-        address: validated.data.address,
+        city: deliveryCity,
+        address: deliveryAddress,
         orders_count: 1,
         total_spent: totalAmount,
       })
@@ -291,8 +311,8 @@ export async function createCustomerOrder(
       full_name: validated.data.full_name,
       phone: cleanPhone,
       email: validated.data.email || null,
-      city: validated.data.city,
-      address: validated.data.address,
+      city: deliveryCity,
+      address: deliveryAddress,
       notes: validated.data.notes || null,
       subtotal,
       shipping_cost: shippingCost,

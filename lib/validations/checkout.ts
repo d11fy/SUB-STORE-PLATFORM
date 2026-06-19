@@ -19,13 +19,16 @@ export const checkoutSchema = z.object({
     .email("البريد الإلكتروني غير صالح")
     .optional()
     .or(z.literal("")),
-  country: z.string().min(1, "الدولة مطلوبة"),
-  city: z.string().min(1, "المدينة مطلوبة"),
+  // Delivery fields — required only when store.requires_shipping = true.
+  // The server validates them contextually; the client hides them for digital stores.
+  country: z.string().optional().or(z.literal("")),
+  city: z.string().optional().or(z.literal("")),
   address: z
     .string()
     .trim()
-    .min(5, "العنوان التفصيلي يجب أن يكون 5 أحرف على الأقل")
-    .max(300, "العنوان طويل جداً"),
+    .max(300, "العنوان طويل جداً")
+    .optional()
+    .or(z.literal("")),
   notes: z
     .string()
     .trim()
