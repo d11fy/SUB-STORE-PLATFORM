@@ -1,5 +1,5 @@
-import { getPlatformSettings } from "@/actions/admin";
-import { Settings, Info } from "lucide-react";
+import { getPlatformSettings, getSmtpSettings } from "@/actions/admin";
+import { Settings } from "lucide-react";
 import type { Metadata } from "next";
 import { SettingsForm } from "./settings-form";
 
@@ -7,8 +7,13 @@ export const metadata: Metadata = {
   title: "إعدادات المنصة | الإدارة",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminSettingsPage() {
-  const settings = await getPlatformSettings();
+  const [settings, smtp] = await Promise.all([
+    getPlatformSettings(),
+    getSmtpSettings(),
+  ]);
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -22,15 +27,7 @@ export default async function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* Info note */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-500/5 border border-blue-500/15 text-blue-700">
-        <Info className="h-4 w-4 shrink-0 mt-0.5" />
-        <p className="text-xs leading-relaxed">
-          تُحفظ الإعدادات كسجل في نظام المراجعة. كل تغيير يُسجّل ويمكن مراجعته في صفحة سجلات المنصة.
-        </p>
-      </div>
-
-      <SettingsForm initial={settings} />
+      <SettingsForm initial={settings} smtp={smtp} />
     </div>
   );
 }

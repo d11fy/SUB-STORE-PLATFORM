@@ -575,6 +575,104 @@ export async function savePlatformSettings(settings: Record<string, unknown>) {
 }
 
 // ============================================================
+// SMTP SETTINGS (stored in platform_settings table)
+// ============================================================
+export async function getSmtpSettings(): Promise<{
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_pass: string;
+  smtp_from: string;
+  configured: boolean;
+}> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("platform_settings")
+    .select("key, value")
+    .in("key", ["smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from"]);
+
+  const kv: Record<string, string> = {};
+  data?.forEach(({ key, value }: { key: string; value: string | null }) => {
+    if (value) kv[key] = value;
+  });
+
+  return {
+    smtp_host: kv.smtp_host ?? "",
+    smtp_port: kv.smtp_port ?? "587",
+    smtp_user: kv.smtp_user ?? "",
+    smtp_pass: kv.smtp_pass ? "••••••••" : "",
+    smtp_from: kv.smtp_from ?? "",
+    configured: !!(kv.smtp_host && kv.smtp_user && kv.smtp_pass),
+  };
+}
+
+export async function saveSmtpSettings(settings: {
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_pass: string;
+  smtp_from: string;
+}) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  // Only update password if it wasn't masked (i.e. user typed a new one)
+  const entries = Object.entries(settings)
+    .filter(([, v]) => v && v !== "••••••••")
+    .map(([key, value]) => ({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+      updated_by: adminId,
+    }));
+
+  if (entries.length === 0) return { success: true };
+
+  const { error } = await supabase.from("platform_settings").upsert(entries, { onConflict: "key" });
+  if (error) return { success: false, error: "فشل حفظ إعدادات البريد" };
+
+  // Log to admin_logs (without password)
+  await supabase.from("admin_logs").insert({
+    admin_id: adminId,
+    action: "smtp_settings_update",
+    description: "تم تحديث إعدادات البريد الإلكتروني",
+    metadata: {
+      smtp_host: settings.smtp_host,
+      smtp_from: settings.smtp_from,
+      updated_fields: entries.map((e) => e.key),
+    } as import("@/lib/types/database").Json,
+  });
+
+  // Invalidate in-memory SMTP cache so next email uses new settings
+  const { invalidateSmtpCache } = await import("@/lib/email/sender");
+  invalidateSmtpCache();
+
+  revalidatePath("/admin/settings");
+  return { success: true };
+}
+
+export async function testSmtpSettings(toEmail: string) {
+  await requireAdmin();
+  const { sendEmail } = await import("@/lib/email/sender");
+  const { invalidateSmtpCache } = await import("@/lib/email/sender");
+  invalidateSmtpCache(); // Force re-read from DB
+
+  const result = await sendEmail({
+    to: toEmail,
+    subject: "اختبار إعدادات البريد — سبأ ستور",
+    html: `<div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+      <h2 style="color: #10b981;">✓ إعدادات البريد تعمل بشكل صحيح</h2>
+      <p>هذا إيميل اختباري من لوحة تحكم سبأ ستور.</p>
+      <p style="color: #6b7280; font-size: 12px;">إذا وصلك هذا الإيميل، فإن إعدادات SMTP مضبوطة بشكل صحيح.</p>
+    </div>`,
+  });
+
+  return result;
+}
+
+// ============================================================
 // SECURITY CENTER
 // ============================================================
 export async function getSecurityOverview() {

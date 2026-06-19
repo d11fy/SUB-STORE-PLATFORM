@@ -720,6 +720,21 @@ export interface Database {
         };
         Update: never;
       };
+      platform_settings: {
+        Row: {
+          key: string;
+          value: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          key: string;
+          value?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_settings"]["Insert"]>;
+      };
     };
     Views: {
       [_ in never]: never;
