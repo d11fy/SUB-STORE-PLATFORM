@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -11,7 +12,10 @@ import {
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types/database";
 
-const navItems = [
+// ============================================================
+// NAV CONFIG
+// ============================================================
+const NAV_ITEMS = [
   {
     group: "عام",
     items: [
@@ -51,127 +55,222 @@ const navItems = [
   },
 ];
 
+// ============================================================
+// COMPONENT
+// ============================================================
 interface Props {
   user: User | null;
 }
 
 export function AdminMobileDrawer({ user }: Props) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const isActive = (href: string) => {
-    if (href === "/admin") return pathname === "/admin";
-    return pathname.startsWith(href);
-  };
+  // SSR-safe portal mount
+  useEffect(() => setMounted(true), []);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  // Auto-close on route change
+  useEffect(() => { close(); }, [pathname, close]);
+
+  // ESC key
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { close(); triggerRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  // Body scroll lock
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  // Focus trap
+  useEffect(() => {
+    if (!open || !drawerRef.current) return;
+    const drawer = drawerRef.current;
+    const focusable = Array.from(
+      drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    focusable[0]?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    window.addEventListener("keydown", trap);
+    return () => window.removeEventListener("keydown", trap);
+  }, [open]);
+
+  const isActive = (href: string) =>
+    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+
+  // Portal content — rendered at document.body to escape backdrop-filter ancestors
+  const portal = mounted
+    ? createPortal(
+        <>
+          {/* Overlay */}
+          <div
+            aria-hidden="true"
+            onClick={close}
+            className={cn(
+              "fixed inset-0 z-[60] bg-black/40 md:hidden transition-opacity duration-200",
+              open ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}
+          />
+
+          {/* Drawer */}
+          <div
+            ref={drawerRef}
+            id="admin-mobile-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="قائمة التنقل"
+            dir="rtl"
+            className={cn(
+              "fixed inset-y-0 right-0 z-[70] w-[280px] max-w-[85vw] md:hidden",
+              "flex flex-col bg-white border-l border-slate-100",
+              "shadow-[−4px_0_24px_rgba(0,0,0,0.08)]",
+              "transition-transform duration-300",
+              open ? "translate-x-0 ease-out" : "translate-x-full ease-in"
+            )}
+          >
+            {/* Header row */}
+            <div className="h-14 px-4 flex items-center justify-between shrink-0 border-b border-slate-100">
+              <Link href="/" className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shrink-0">
+                  <span className="text-white font-cairo font-bold text-sm">أ</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-cairo font-bold text-slate-900 text-sm leading-none truncate">
+                    إدارة المنصة
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Saba Store Admin</p>
+                </div>
+              </Link>
+              <button
+                onClick={close}
+                aria-label="إغلاق القائمة"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Admin profile chip */}
+            <div className="px-3 py-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50">
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.full_name ?? ""}
+                    className="w-8 h-8 rounded-lg object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {user?.full_name ?? "المدير العام"}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <nav
+              aria-label="قائمة الإدارة"
+              className="flex-1 overflow-y-auto px-3 py-3 space-y-5 overscroll-contain"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {NAV_ITEMS.map((group) => (
+                <div key={group.group}>
+                  <p className="text-[10px] font-semibold text-slate-400 px-3 mb-1.5 uppercase tracking-widest">
+                    {group.group}
+                  </p>
+                  <ul className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const active = isActive(item.href);
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              "flex items-center gap-3 px-3 rounded-xl min-h-[44px] text-sm font-medium transition-colors",
+                              active
+                                ? "bg-primary/10 text-primary"
+                                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            )}
+                          >
+                            <item.icon
+                              className={cn(
+                                "h-4 w-4 shrink-0",
+                                active ? "text-primary" : "text-slate-400"
+                              )}
+                            />
+                            <span className="flex-1">{item.label}</span>
+                            {active && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                            )}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </nav>
+
+            {/* Footer */}
+            <div className="px-3 pb-6 pt-3 border-t border-slate-100 shrink-0">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 px-3 min-h-[44px] rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4 shrink-0 rtl-flip" />
+                <span>العودة للوحة التاجر</span>
+              </Link>
+            </div>
+          </div>
+        </>,
+        document.body
+      )
+    : null;
 
   return (
     <>
-      {/* Hamburger trigger — mobile only */}
+      {/* Trigger button — stays in-tree */}
       <button
+        ref={triggerRef}
         onClick={() => setOpen(true)}
-        className="md:hidden p-2 rounded-lg text-foreground hover:bg-sidebar-accent border border-border transition-colors min-h-9 min-w-9 flex items-center justify-center shrink-0"
-        aria-label="فتح القائمة"
+        aria-label="فتح قائمة التنقل"
+        aria-expanded={open}
+        aria-controls="admin-mobile-drawer"
+        aria-haspopup="dialog"
+        className="md:hidden h-9 w-9 flex items-center justify-center rounded-lg text-foreground hover:bg-sidebar-accent border border-border transition-colors shrink-0"
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      {/* Drawer — slides in from right (RTL) */}
-      <div
-        className={cn(
-          "fixed inset-y-0 right-0 z-50 w-72 bg-sidebar border-l border-sidebar-border flex flex-col md:hidden",
-          "transition-transform duration-300 ease-in-out",
-          open ? "translate-x-0" : "translate-x-full"
-        )}
-      >
-        {/* Header */}
-        <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
-            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-white font-cairo font-bold text-sm">
-              أ
-            </div>
-            <div>
-              <p className="font-cairo font-bold text-foreground text-sm leading-tight">إدارة المنصة</p>
-              <p className="text-xs text-muted-foreground">Saba Store Admin</p>
-            </div>
-          </Link>
-          <button
-            onClick={() => setOpen(false)}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Admin profile */}
-        <div className="px-3 py-3 border-b border-sidebar-border">
-          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-sidebar-accent">
-            {user?.avatar_url ? (
-              <img
-                src={user.avatar_url}
-                alt={user.full_name || ""}
-                className="w-8 h-8 rounded-lg object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground truncate">
-                {user?.full_name || "المدير العام"}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5 no-scrollbar">
-          {navItems.map((group) => (
-            <div key={group.group}>
-              <p className="text-xs font-medium text-muted-foreground/60 px-2 mb-1.5 uppercase tracking-wider">
-                {group.group}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "sidebar-item",
-                      isActive(item.href) && "active bg-primary/10 text-primary border-primary"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="flex-1">{item.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Back to merchant dashboard */}
-        <div className="px-3 pb-4 border-t border-sidebar-border pt-3">
-          <Link
-            href="/dashboard"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 p-3 rounded-xl hover:bg-sidebar-accent transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4 shrink-0 rtl-flip" />
-            <span className="text-sm font-medium">العودة للوحة التاجر</span>
-          </Link>
-        </div>
-      </div>
+      {portal}
     </>
   );
 }
