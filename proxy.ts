@@ -79,6 +79,48 @@ export async function proxy(request: NextRequest) {
   }
 
   // ============================================================
+  // STOREFRONT SUBSCRIPTION ENFORCEMENT
+  // Block access to store pages when trial expired or suspended
+  // ============================================================
+  if (
+    pathname.startsWith("/store/") &&
+    !pathname.includes("/suspended") &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    const slugMatch = pathname.match(/^\/store\/([^/]+)/);
+    const storeSlug = slugMatch?.[1];
+
+    if (storeSlug) {
+      const enforcementClient = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { cookies: { getAll: () => [], setAll: () => {} } }
+      );
+
+      const { data: store } = await enforcementClient
+        .from("stores")
+        .select("subscription_status, trial_ends_at, subscription_ends_at, status")
+        .eq("slug", storeSlug)
+        .maybeSingle();
+
+      if (store) {
+        const isBlocked =
+          store.status === "suspended" ||
+          store.subscription_status === "suspended" ||
+          store.subscription_status === "expired" ||
+          (store.subscription_status === "trial" &&
+            store.trial_ends_at !== null &&
+            new Date(store.trial_ends_at) < new Date());
+
+        if (isBlocked) {
+          const suspendedUrl = new URL(`/store/${storeSlug}/suspended`, request.url);
+          return NextResponse.redirect(suspendedUrl);
+        }
+      }
+    }
+  }
+
+  // ============================================================
   // SESSION REFRESH
   // ============================================================
   let supabaseResponse = NextResponse.next({ request });

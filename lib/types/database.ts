@@ -187,6 +187,9 @@ export interface Database {
           country: string;
           currency: string;
           status: StoreStatus;
+          subscription_status: "trial" | "active" | "expired" | "suspended";
+          trial_ends_at: string | null;
+          subscription_ends_at: string | null;
           current_theme_id: string | null;
           package_id: string | null;
           meta_title: string | null;
@@ -678,6 +681,45 @@ export interface Database {
         };
         Update: Partial<Database["public"]["Tables"]["store_pages"]["Insert"]>;
       };
+      payment_requests: {
+        Row: {
+          id: string;
+          store_id: string;
+          plan: string;
+          amount: number | null;
+          currency: string;
+          transaction_number: string | null;
+          notes: string | null;
+          receipt_url: string | null;
+          status: "pending" | "approved" | "rejected";
+          admin_note: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Omit<Database["public"]["Tables"]["payment_requests"]["Row"], "store_id" | "plan">> & {
+          store_id: string;
+          plan: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["payment_requests"]["Insert"]>;
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          actor_role: string | null;
+          action: string;
+          resource_type: string | null;
+          resource_id: string | null;
+          details: Json;
+          created_at: string;
+        };
+        Insert: Partial<Omit<Database["public"]["Tables"]["audit_logs"]["Row"], "action">> & {
+          action: string;
+        };
+        Update: never;
+      };
     };
     Views: {
       [_ in never]: never;
@@ -727,6 +769,8 @@ export type StoreThemeSettings = Database["public"]["Tables"]["store_theme_setti
 export type AdminLog = Database["public"]["Tables"]["admin_logs"]["Row"];
 export type StorePage = Database["public"]["Tables"]["store_pages"]["Row"];
 export type StoreDomain = Database["public"]["Tables"]["domains"]["Row"];
+export type PaymentRequest = Database["public"]["Tables"]["payment_requests"]["Row"];
+export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 
 // ============================================================
 // EXTENDED TYPES (with relations)

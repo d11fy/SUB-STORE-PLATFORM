@@ -29,14 +29,21 @@ export default async function BillingPage() {
     ? store.packages[0] ?? null
     : store.packages ?? null;
 
-  // Generate signed URL for existing proof if any
-  let proofSignedUrl: string | null = null;
-  if (subscription?.payment_proof_url) {
-    const { data: signed } = await supabase.storage
-      .from("payment-proofs")
-      .createSignedUrl(subscription.payment_proof_url, 3600);
-    proofSignedUrl = signed?.signedUrl ?? null;
-  }
+  // Generate signed URL for existing proof + fetch request history in parallel
+  const [proofResult, requestsResult] = await Promise.all([
+    subscription?.payment_proof_url
+      ? supabase.storage.from("payment-proofs").createSignedUrl(subscription.payment_proof_url, 3600)
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("payment_requests")
+      .select("id, plan, status, transaction_number, notes, created_at, receipt_url")
+      .eq("store_id", store.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  const proofSignedUrl = (proofResult as any).data?.signedUrl ?? null;
+  const requests = (requestsResult.data ?? []) as any[];
 
   return (
     <BillingClient
@@ -44,6 +51,7 @@ export default async function BillingPage() {
       pkg={pkg}
       storeName={store.name}
       proofSignedUrl={proofSignedUrl}
+      requests={requests}
     />
   );
 }
