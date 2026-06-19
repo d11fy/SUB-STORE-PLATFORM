@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { ProductsClient } from "./products-client";
+import { getStorefrontStore, getStorefrontCategories } from "@/lib/storefront/store-data";
 import type { Metadata } from "next";
 
-// Revalidate public product listing every 60 seconds (ISR)
 export const revalidate = 60;
 
 interface ProductsPageProps {
@@ -13,11 +13,7 @@ interface ProductsPageProps {
 export async function generateMetadata({ params }: ProductsPageProps): Promise<Metadata> {
   const { slug } = await params;
   const supabase = createAdminClient();
-  const { data: store } = await supabase
-    .from("stores")
-    .select("name")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data: store } = await supabase.from("stores").select("name").eq("slug", slug).maybeSingle();
   return {
     title: store ? `منتجات ${store.name} | سبأ ستور` : "المنتجات",
   };
@@ -27,28 +23,17 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
   const { slug } = await params;
   const supabase = createAdminClient();
 
-  // Fetch store
-  const { data: store, error: storeError } = await supabase
-    .from("stores")
-    .select("id, currency")
-    .eq("slug", slug)
-    .maybeSingle();
+  // Cached — layout.tsx already called this; zero extra DB query
+  const store = await getStorefrontStore(slug);
+  if (!store) notFound();
 
-  if (storeError || !store) {
-    notFound();
-  }
-
-  // Fetch categories and products in parallel
-  const [{ data: categories }, { data: products }] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("store_id", store.id)
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true }),
+  // Categories cached — deduplicates with any prior call in this render cycle
+  const [categories, productsResult] = await Promise.all([
+    getStorefrontCategories(store.id),
+    // Full fields needed for client-side sort/filter
     supabase
       .from("products")
-      .select(`*, product_images (*)`)
+      .select("*, product_images (*)")
       .eq("store_id", store.id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -65,8 +50,8 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
       </div>
 
       <ProductsClient
-        products={products || []}
-        categories={categories || []}
+        products={productsResult.data || []}
+        categories={categories}
         storeSlug={slug}
         currency={store.currency}
       />

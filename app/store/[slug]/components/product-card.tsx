@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ShoppingBag, Eye, AlertTriangle } from "lucide-react";
 import { useCartStore, type CartItem } from "@/lib/store/cart-store";
 import { formatCurrency } from "@/lib/utils";
@@ -90,10 +91,12 @@ export function ProductCard({ product, storeSlug, primaryImage, currency }: Prod
       {/* Product Image & Badges */}
       <Link href={`/store/${storeSlug}/product/${product.slug}`} className="block relative aspect-square rounded-xl overflow-hidden bg-muted border border-border mb-4">
         {primaryImage ? (
-          <img
+          <Image
             src={primaryImage}
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-cover group-hover:scale-105 transition-all duration-500"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground/50 bg-muted">

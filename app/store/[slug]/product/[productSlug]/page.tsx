@@ -1,12 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Tag } from "lucide-react";
 import { ProductDetailClient } from "./product-detail-client";
 import { ProductCard } from "../../components/product-card";
+import { getStorefrontStore } from "@/lib/storefront/store-data";
 import type { Metadata } from "next";
 
-// Product pages are public — cache with short revalidation
 export const revalidate = 60;
 
 interface ProductPageProps {
@@ -35,58 +35,40 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const { slug, productSlug } = await params;
   const supabase = createAdminClient();
 
-  // Fetch store
-  const { data: store, error: storeError } = await supabase
-    .from("stores")
-    .select("id, currency, name")
-    .eq("slug", slug)
-    .maybeSingle();
+  // Cached — layout.tsx already called this; zero extra DB query
+  const store = await getStorefrontStore(slug);
+  if (!store) notFound();
 
-  if (storeError || !store) {
-    notFound();
-  }
-
-  // Fetch product with images
   const { data: product } = await supabase
     .from("products")
-    .select(`*, product_images (*)`)
+    .select("*, product_images (*)")
     .eq("store_id", store.id)
     .eq("slug", productSlug)
     .eq("is_active", true)
     .maybeSingle();
 
-  if (!product) {
-    notFound();
-  }
+  if (!product) notFound();
 
-  // Fetch category name + slug for breadcrumb
-  let categoryName = "";
-  let categorySlugStr = "";
-  if (product.category_id) {
-    const { data: category } = await supabase
-      .from("categories")
-      .select("name, slug")
-      .eq("id", product.category_id)
-      .maybeSingle();
-    if (category) {
-      categoryName = category.name;
-      categorySlugStr = category.slug;
-    }
-  }
+  // Category + related fetched in parallel — saves 1 sequential round-trip vs before
+  const [categoryResult, relatedResult] = await Promise.all([
+    product.category_id
+      ? supabase.from("categories").select("name, slug").eq("id", product.category_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("products")
+      .select("*, product_images (*)")
+      .eq("store_id", store.id)
+      .eq("category_id", product.category_id ?? "")
+      .eq("is_active", true)
+      .neq("id", product.id)
+      .limit(4),
+  ]);
 
-  // Fetch related products (same category, excluding current product)
-  const { data: related } = await supabase
-    .from("products")
-    .select(`*, product_images (*)`)
-    .eq("store_id", store.id)
-    .eq("category_id", product.category_id ?? "")
-    .eq("is_active", true)
-    .neq("id", product.id)
-    .limit(4);
+  const categoryName = categoryResult.data?.name ?? "";
+  const categorySlugStr = categoryResult.data?.slug ?? "";
+  const relatedList = (relatedResult.data as any[]) ?? [];
 
   const prod = product as any;
-  const relatedList = (related as any) || [];
-
   const primaryImage =
     prod.product_images?.find((img: any) => img.is_primary)?.url ||
     prod.product_images?.[0]?.url ||
@@ -100,10 +82,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span>/</span>
         {prod.category_id && categorySlugStr && (
           <>
-            <Link
-              href={`/store/${slug}/category/${categorySlugStr}`}
-              className="hover:text-foreground transition-colors"
-            >
+            <Link href={`/store/${slug}/category/${categorySlugStr}`} className="hover:text-foreground transition-colors">
               {categoryName}
             </Link>
             <span>/</span>
@@ -130,12 +109,16 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         {/* Right: Images Gallery */}
         <div className="space-y-4">
+          {/* Hero image — priority for LCP */}
           <div className="aspect-square w-full rounded-2xl overflow-hidden bg-muted border border-border relative">
             {primaryImage ? (
-              <img
+              <Image
                 src={primaryImage}
                 alt={prod.name}
-                className="w-full h-full object-cover"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                priority
+                className="object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-6xl">
@@ -150,9 +133,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
               {prod.product_images.map((img: any) => (
                 <div
                   key={img.id}
-                  className="aspect-square rounded-xl overflow-hidden bg-muted border border-border hover:border-primary/50 transition-all cursor-pointer"
+                  className="aspect-square rounded-xl overflow-hidden bg-muted border border-border hover:border-primary/50 transition-all cursor-pointer relative"
                 >
-                  <img src={img.url} alt={prod.name} className="w-full h-full object-cover" />
+                  <Image
+                    src={img.url}
+                    alt={prod.name}
+                    fill
+                    sizes="25vw"
+                    className="object-cover"
+                  />
                 </div>
               ))}
             </div>
@@ -160,7 +149,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </div>
       </div>
 
-      {/* ── RELATED PRODUCTS ── */}
+      {/* Related Products */}
       {relatedList.length > 0 && (
         <div className="space-y-6 border-t border-border pt-12">
           <div className="text-right">

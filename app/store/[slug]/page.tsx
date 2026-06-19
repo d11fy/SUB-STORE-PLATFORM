@@ -1,12 +1,15 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { ThemeRenderer } from "@/components/storefront/themes/theme-renderer";
+import {
+  getStorefrontStore,
+  getStorefrontProducts,
+  getStorefrontCategories,
+} from "@/lib/storefront/store-data";
 
-interface StorePageProps {
-  params: Promise<{ slug: string }>;
-}
+// ISR: revalidate every 60 seconds — serves cached HTML to most visitors
+export const revalidate = 60;
 
-const SAFE_THEME_SETTINGS_FALLBACK = {
+const THEME_SETTINGS_FALLBACK = {
   id: "",
   primary_color: "#1B4FD8",
   secondary_color: "#7C3AED",
@@ -26,53 +29,36 @@ const SAFE_THEME_SETTINGS_FALLBACK = {
   updated_at: new Date().toISOString(),
 };
 
+interface StorePageProps {
+  params: Promise<{ slug: string }>;
+}
+
 export default async function StorePage({ params }: StorePageProps) {
   const { slug } = await params;
-  const supabase = createAdminClient();
 
-  // Fetch store, active theme, and theme settings
-  const { data: store, error: storeError } = await supabase
-    .from("stores")
-    .select("*, themes (*), store_theme_settings (*)")
-    .eq("slug", slug)
-    .maybeSingle();
+  // getStorefrontStore is memoized with React.cache() — layout.tsx already called it,
+  // so this returns the cached result with zero additional DB queries.
+  const store = await getStorefrontStore(slug);
+  if (!store) notFound();
 
-  if (storeError || !store) {
-    notFound();
-  }
-
-  // Fetch categories and products in parallel — both depend on store.id but not each other
-  const [{ data: categories }, { data: products }] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("store_id", store.id)
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("products")
-      .select(`*, product_images (*)`)
-      .eq("store_id", store.id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(100),
+  // Parallel fetch: categories and products — both only need store.id
+  const [categories, products] = await Promise.all([
+    getStorefrontCategories(store.id),
+    // Homepage shows ~20 products — the theme slices to featured/latest subsets
+    getStorefrontProducts(store.id, 20),
   ]);
 
-  // Parse theme settings safely — never let a bad JSONB crash the storefront
   const rawThemeSettings = store.store_theme_settings;
-  const settingsData = Array.isArray(rawThemeSettings)
-    ? rawThemeSettings[0]
-    : rawThemeSettings;
-
+  const settingsData = Array.isArray(rawThemeSettings) ? rawThemeSettings[0] : rawThemeSettings;
   const themeSettings = settingsData
-    ? { ...SAFE_THEME_SETTINGS_FALLBACK, store_id: store.id, ...settingsData }
-    : { ...SAFE_THEME_SETTINGS_FALLBACK, store_id: store.id };
+    ? { ...THEME_SETTINGS_FALLBACK, store_id: store.id, ...settingsData }
+    : { ...THEME_SETTINGS_FALLBACK, store_id: store.id };
 
   return (
     <ThemeRenderer
       store={store as any}
-      categories={categories || []}
-      products={(products as any) || []}
+      categories={categories}
+      products={products}
       settings={themeSettings as any}
     />
   );

@@ -7,18 +7,21 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: [
+      // Cover both public and signed Supabase storage URLs
       {
         protocol: "https",
         hostname: "**.supabase.co",
-        pathname: "/storage/v1/object/public/**",
+        pathname: "/storage/v1/object/**",
       },
       {
         protocol: "https",
         hostname: "**.supabase.in",
-        pathname: "/storage/v1/object/public/**",
+        pathname: "/storage/v1/object/**",
       },
     ],
     formats: ["image/avif", "image/webp"],
+    // Cache optimized images for 24h at the CDN layer
+    minimumCacheTTL: 86400,
   },
   async headers() {
     const supabaseHost = "*.supabase.co *.supabase.in";
