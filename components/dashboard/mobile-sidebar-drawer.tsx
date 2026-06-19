@@ -43,7 +43,8 @@ const navItems = [
     items: [
       { label: "إعدادات المتجر", href: "/dashboard/settings", icon: Settings },
       { label: "النطاق المخصص", href: "/dashboard/domain", icon: Globe },
-      { label: "الاشتراك", href: "/dashboard/subscription", icon: Crown },
+      { label: "الاشتراك والباقة", href: "/dashboard/subscription", icon: Crown },
+      { label: "الفواتير والدفع", href: "/dashboard/billing", icon: CreditCard },
     ],
   },
 ];

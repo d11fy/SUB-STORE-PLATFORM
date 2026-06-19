@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { MobileSidebarDrawer } from "@/components/dashboard/mobile-sidebar-drawer";
+import { TrialBanner } from "@/components/dashboard/trial-banner";
+import { SubscriptionGuard } from "@/components/dashboard/subscription-guard";
+import { getSubscriptionState, isSubscriptionLocked } from "@/lib/subscription-utils";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -33,7 +36,7 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
-  // Fetch merchant store
+  // Fetch merchant store with subscription
   const { data: storeData } = await supabase
     .from("stores")
     .select(`*, packages (*), subscriptions (*)`)
@@ -46,6 +49,14 @@ export default async function DashboardLayout({
   if (!store) {
     redirect("/dashboard/onboarding");
   }
+
+  // Resolve subscription (Supabase FK join returns array or object)
+  const subscription = Array.isArray(store.subscriptions)
+    ? store.subscriptions[0] ?? null
+    : store.subscriptions ?? null;
+
+  const subState = getSubscriptionState(subscription);
+  const locked = isSubscriptionLocked(subscription);
 
   return (
     <div className="min-h-dvh bg-background flex">
@@ -61,8 +72,22 @@ export default async function DashboardLayout({
             <MobileSidebarDrawer store={store} user={profile} />
           }
         />
+
+        {/* Trial / subscription status banner */}
+        <TrialBanner
+          status={subState.status}
+          daysRemaining={subState.daysRemaining}
+          adminNote={subState.adminNote}
+        />
+
         <main className="flex-1 p-3 sm:p-5 lg:p-6 overflow-auto">
-          {children}
+          <SubscriptionGuard
+            isLocked={locked}
+            lockState={subState.status}
+            adminNote={subState.adminNote}
+          >
+            {children}
+          </SubscriptionGuard>
         </main>
       </div>
     </div>

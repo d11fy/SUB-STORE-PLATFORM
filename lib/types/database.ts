@@ -21,7 +21,10 @@ export type SubscriptionStatus =
   | "active"
   | "past_due"
   | "canceled"
-  | "unpaid";
+  | "unpaid"
+  | "pending"
+  | "rejected"
+  | "expired";
 
 export type OrderStatus =
   | "جديد"
@@ -215,6 +218,9 @@ export interface Database {
           current_period_start: string | null;
           current_period_end: string | null;
           canceled_at: string | null;
+          payment_proof_url: string | null;
+          admin_note: string | null;
+          plan: string | null;
           created_at: string;
           updated_at: string;
         };

@@ -250,6 +250,52 @@ export async function extendTrial(subscriptionId: string, storeId: string, daysT
   return { success: true };
 }
 
+export async function approveSubscription(subscriptionId: string, storeId: string) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  const periodStart = new Date();
+  const periodEnd = new Date();
+  periodEnd.setDate(periodEnd.getDate() + 30);
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({
+      status: "active",
+      admin_note: null,
+      current_period_start: periodStart.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+    })
+    .eq("id", subscriptionId);
+
+  if (error) throw new Error("فشل تفعيل الاشتراك");
+
+  // Also update store status to active
+  await supabase.from("stores").update({ status: "active" }).eq("id", storeId);
+
+  await logAdminAction(adminId, "approve_subscription", "تم تفعيل اشتراك المتجر", storeId, { subscriptionId });
+  revalidatePath("/admin/subscriptions");
+  revalidatePath(`/admin/stores/${storeId}`);
+  return { success: true };
+}
+
+export async function rejectSubscription(subscriptionId: string, storeId: string, note: string) {
+  const adminId = await requireAdmin();
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ status: "rejected", admin_note: note || "تم رفض طلب الدفع" })
+    .eq("id", subscriptionId);
+
+  if (error) throw new Error("فشل رفض الاشتراك");
+
+  await logAdminAction(adminId, "reject_subscription", `تم رفض اشتراك المتجر: ${note}`, storeId, { subscriptionId, note });
+  revalidatePath("/admin/subscriptions");
+  revalidatePath(`/admin/stores/${storeId}`);
+  return { success: true };
+}
+
 // ============================================================
 // AI CREDITS MANAGEMENT
 // ============================================================
