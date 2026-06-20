@@ -70,7 +70,7 @@ export function TabAi({ availableCredits, onDraftApplied }: TabAiProps) {
   const [prompt, setPrompt] = useState("");
   const [storeType, setStoreType] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
-  const [tone, setTone] = useState("");
+  const [tone, setTone] = useState<"" | "luxury" | "professional" | "minimal" | "bold" | "playful">("");
   const [preferredColors, setPreferredColors] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -87,7 +87,7 @@ export function TabAi({ availableCredits, onDraftApplied }: TabAiProps) {
         prompt: prompt.trim(),
         store_type: storeType.trim() || undefined,
         target_audience: targetAudience.trim() || undefined,
-        tone: (tone || undefined) as any,
+        tone: tone || undefined,
         preferred_colors: preferredColors.trim() || undefined,
       });
 
@@ -227,7 +227,7 @@ export function TabAi({ availableCredits, onDraftApplied }: TabAiProps) {
               </label>
               <select
                 value={tone}
-                onChange={(e) => setTone(e.target.value)}
+                onChange={(e) => setTone(e.target.value as "" | "luxury" | "professional" | "minimal" | "bold" | "playful")}
                 disabled={isPending}
                 className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
               >

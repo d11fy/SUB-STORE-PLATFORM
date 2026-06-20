@@ -104,7 +104,7 @@ export async function getStoreThemeSettings(): Promise<{
   }
 }
 
-// Set active theme for merchant store with package gating
+// Set active theme for merchant store
 export async function setActiveThemeAction(
   themeId: string
 ): Promise<{ success: boolean; error: string | null }> {
@@ -124,19 +124,7 @@ export async function setActiveThemeAction(
       return { success: false, error: "الثيم المحدد غير متوفر" };
     }
 
-    // 2. Validate package constraints
-    const pkgSlug = store.packages?.slug || "starter";
-    if (pkgSlug === "starter") {
-      const allowedSlugs = ["fashion", "blank"];
-      if (!allowedSlugs.includes(theme.slug)) {
-        return {
-          success: false,
-          error: "باقة الانطلاقة تسمح فقط بقالب الملابس وقالب التخصيص الفارغ. يرجى الترقية لتفعيل قوالب مميزة.",
-        };
-      }
-    }
-
-    // 3. Update store theme ID
+    // 2. Update store theme ID
     const { error: updateError } = await supabase
       .from("stores")
       .update({ current_theme_id: themeId })

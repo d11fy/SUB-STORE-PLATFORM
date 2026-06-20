@@ -136,10 +136,11 @@ export async function publishCssDraftAction(): Promise<{
     const { error: liveError } = await writeLiveCss(storeId, livecss);
     if (liveError) return { success: false, error: "فشل نشر CSS: " + liveError };
 
-    // 2. Clear draft from JSONB — keeps extended settings clean
+    // 2. Clear draft from JSONB and record publish timestamp for cache-busting
     const next: ExtendedThemeSettings = {
       ...extended,
       custom_css_draft: undefined,
+      css_published_at: new Date().toISOString(),
     };
     const { error: draftError } = await writeCssSettings(storeId, rowId, next);
     if (draftError) return { success: false, error: "فشل مسح مسودة CSS: " + draftError };
@@ -152,7 +153,10 @@ export async function publishCssDraftAction(): Promise<{
       .select("slug")
       .eq("id", storeId)
       .single();
-    if (data?.slug) revalidatePath(`/store/${data.slug}`);
+    if (data?.slug) {
+      revalidatePath(`/store/${data.slug}`);
+      revalidatePath(`/store/${data.slug}/theme.css`);
+    }
 
     return { success: true, error: null };
   } catch (err) {

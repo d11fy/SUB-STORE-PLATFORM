@@ -55,6 +55,8 @@ import {
   DEFAULT_HOMEPAGE_CONFIG,
   type SectionConfig,
   type SectionType,
+  type HeaderConfig,
+  type FooterConfig,
   SECTION_TYPES,
 } from "@/lib/themes/customization-types";
 import type { StoreWithTheme } from "@/components/storefront/themes/theme-types";
@@ -102,6 +104,13 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "ai", label: "الذكاء الاصطناعي", icon: <Sparkles className="h-3.5 w-3.5" /> },
   { id: "css", label: "CSS مخصص", icon: <Code2 className="h-3.5 w-3.5" /> },
 ];
+
+const ANNOUNCEMENT_STYLES_MAP: Record<string, string> = {
+  primary: "bg-primary text-white",
+  amber: "bg-amber-400 text-amber-950",
+  emerald: "bg-emerald-600 text-white",
+  rose: "bg-rose-500 text-white",
+};
 
 const FONTS = [
   { value: "Cairo", label: "Cairo — كلاسيكي عريض" },
@@ -449,7 +458,6 @@ export function CustomizeClient({
   hasDraft,
   categories,
   products,
-  packageData,
   availableCredits,
   liveCss,
   draftCss,
@@ -650,6 +658,9 @@ export function CustomizeClient({
   };
 
   // ── Build draft settings for live preview ──────────────────
+  // Inject current form values into .settings JSONB so theme components
+  // reading getOrderedSections(settings, defaults) and header/footer configs
+  // reflect live changes without requiring a save/publish cycle.
   const previewSettings: StoreThemeSettings = {
     ...initialSettings,
     primary_color: watched.primary_color || initialSettings.primary_color,
@@ -663,6 +674,13 @@ export function CustomizeClient({
     footer_content: watched.footer_config?.text || watched.footer_content || null,
     sections_order: sections.filter((s) => s.enabled).map((s) => s.type),
     hidden_sections: sections.filter((s) => !s.enabled).map((s) => s.type),
+    settings: {
+      ...(initialSettings.settings as any ?? {}),
+      sections_config: sections,
+      header_config: watched.header_config,
+      footer_config: watched.footer_config,
+      homepage_config: watched.homepage_config,
+    } as any,
   };
 
   // Demo click interceptor for preview panel
@@ -709,6 +727,7 @@ export function CustomizeClient({
           {(hasDraft || isDirty) && (
             <button
               type="button"
+              data-testid="discard-draft-btn"
               onClick={handleDiscard}
               disabled={isWorking}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-muted-foreground border border-border bg-card hover:bg-muted rounded-xl transition-all disabled:opacity-50"
@@ -725,6 +744,7 @@ export function CustomizeClient({
           {/* Save Draft */}
           <button
             type="button"
+            data-testid="save-draft-btn"
             onClick={handleSaveDraft}
             disabled={isWorking}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-foreground border border-border bg-card hover:bg-muted rounded-xl transition-all disabled:opacity-50"
@@ -740,6 +760,7 @@ export function CustomizeClient({
           {/* Publish */}
           <button
             type="button"
+            data-testid="publish-btn"
             onClick={handlePublish}
             disabled={isWorking}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-primary hover:bg-primary/90 text-white rounded-xl transition-all disabled:opacity-50"
@@ -766,6 +787,10 @@ export function CustomizeClient({
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  data-state={activeTab === tab.id ? "active" : "inactive"}
+                  data-testid={`tab-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     "flex flex-col items-center gap-0.5 py-2.5 border-b-2 text-[10px] font-bold transition-all cursor-pointer",
@@ -1265,7 +1290,7 @@ export function CustomizeClient({
             {activeTab === "ai" && (
               <TabAi
                 availableCredits={availableCredits}
-                onDraftApplied={() => setActiveTab("branding")}
+                onDraftApplied={() => { router.refresh(); setActiveTab("branding"); }}
               />
             )}
 
@@ -1380,7 +1405,19 @@ export function CustomizeClient({
               } as React.CSSProperties}
               onClickCapture={handlePreviewClick}
             >
-              <ThemeHeader store={store} settings={previewSettings} />
+              {/* Announcement bar — mirrors storefront layout */}
+              {watched.homepage_config?.show_announcement_bar && watched.homepage_config.announcement_text && (
+                <div
+                  className={cn(
+                    "w-full py-2 px-4 text-center text-xs font-semibold font-cairo",
+                    ANNOUNCEMENT_STYLES_MAP[watched.homepage_config.announcement_style ?? "primary"] ?? "bg-primary text-white"
+                  )}
+                  dir="rtl"
+                >
+                  {watched.homepage_config.announcement_text}
+                </div>
+              )}
+              <ThemeHeader store={store} settings={previewSettings} headerConfig={watched.header_config as HeaderConfig} />
               <main className="flex-1 flex flex-col bg-background">
                 <ThemeRenderer
                   store={store}
@@ -1389,7 +1426,7 @@ export function CustomizeClient({
                   settings={previewSettings}
                 />
               </main>
-              <ThemeFooter store={store} settings={previewSettings} />
+              <ThemeFooter store={store} settings={previewSettings} footerConfig={watched.footer_config as FooterConfig} />
             </div>
           </div>
         </div>

@@ -385,6 +385,7 @@ export async function applyAiThemeConfigAsDraftAction(generationId: string): Pro
     const settingsJson: Record<string, unknown> = {
       ...extended,
       draft_config: draft,
+      draft_saved_at: new Date().toISOString(),
     };
 
     const { data: row } = await supabase
@@ -392,6 +393,17 @@ export async function applyAiThemeConfigAsDraftAction(generationId: string): Pro
       .select("id")
       .eq("store_id", storeId)
       .maybeSingle();
+
+    // Look up current_theme_id only when inserting (no existing row)
+    let themeIdForInsert = "";
+    if (!row) {
+      const { data: storeRow } = await supabase
+        .from("stores")
+        .select("current_theme_id")
+        .eq("id", storeId)
+        .single();
+      themeIdForInsert = storeRow?.current_theme_id ?? "";
+    }
 
     const writeResult = row
       ? await supabase
@@ -402,7 +414,7 @@ export async function applyAiThemeConfigAsDraftAction(generationId: string): Pro
           .from("store_theme_settings")
           .insert({
             store_id: storeId,
-            theme_id: "",
+            theme_id: themeIdForInsert,
             settings: settingsJson as unknown as Json,
           });
 

@@ -97,6 +97,7 @@ export async function saveThemeDraftAction(
     const nextSettings: ExtendedThemeSettings = {
       ...extended,
       draft_config: validated.data,
+      draft_saved_at: new Date().toISOString(),
     };
 
     const { error } = await writeSettings(storeId, rowId, nextSettings);

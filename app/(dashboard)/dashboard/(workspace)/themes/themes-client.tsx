@@ -4,10 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Palette,
-  ShieldAlert,
   Check,
   Loader2,
-  Sparkles,
   Layout,
   Eye,
 } from "lucide-react";
@@ -165,7 +163,6 @@ const PREVIEW_STYLE: Record<
 
 export function ThemesClient({ themes, currentThemeId, store }: ThemesClientProps) {
   const [activatingId, setActivatingId] = useState<string | null>(null);
-  const pkgSlug = store.packages?.slug || "starter";
 
   const handleActivate = async (themeId: string) => {
     setActivatingId(themeId);
@@ -181,13 +178,6 @@ export function ThemesClient({ themes, currentThemeId, store }: ThemesClientProp
     } finally {
       setActivatingId(null);
     }
-  };
-
-  const isThemeLocked = (themeSlug: string) => {
-    if (pkgSlug === "starter") {
-      return themeSlug !== "fashion" && themeSlug !== "blank";
-    }
-    return false;
   };
 
   return (
@@ -210,7 +200,6 @@ export function ThemesClient({ themes, currentThemeId, store }: ThemesClientProp
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {themes.map((theme) => {
           const isCurrent = theme.id === currentThemeId;
-          const isLocked = isThemeLocked(theme.slug);
           const info = THEME_INFO[theme.slug] || {
             name: theme.name,
             field: "متجر عام",
@@ -294,18 +283,8 @@ export function ThemesClient({ themes, currentThemeId, store }: ThemesClientProp
                   </div>
                 )}
 
-                {/* Locked overlay */}
-                {isLocked && (
-                  <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 z-10">
-                    <ShieldAlert className="h-7 w-7 text-amber-400" />
-                    <span className="text-[10px] font-bold text-slate-200 text-center px-3">
-                      غير متوفر في باقتك الحالية
-                    </span>
-                  </div>
-                )}
-
                 {/* Theme icon */}
-                {!isLocked && previewStyle && (
+                {previewStyle && (
                   <div className="absolute bottom-2 left-2 text-lg opacity-80">
                     {previewStyle.icon}
                   </div>
@@ -368,24 +347,6 @@ export function ThemesClient({ themes, currentThemeId, store }: ThemesClientProp
                       >
                         <Layout className="h-3.5 w-3.5" />
                         تخصيص المظهر
-                      </Link>
-                    </>
-                  ) : isLocked ? (
-                    <>
-                      {/* Preview (always allowed) + Upgrade */}
-                      <Link
-                        href={`/dashboard/themes/preview/${theme.slug}`}
-                        className="w-full py-2 bg-muted border border-border text-foreground text-xs font-bold rounded-xl hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all text-center flex items-center justify-center gap-1.5"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        معاينة الثيم
-                      </Link>
-                      <Link
-                        href="/dashboard/subscription"
-                        className="w-full py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-100 transition-all text-center flex items-center justify-center gap-1.5"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        ترقية الباقة للتفعيل
                       </Link>
                     </>
                   ) : (

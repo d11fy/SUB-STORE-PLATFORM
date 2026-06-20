@@ -239,10 +239,15 @@ export interface ExtendedThemeSettings {
   homepage_config?: HomepageConfig;
   draft_config?: ThemeDraftConfig;
   published_at?: string;
+  // Updated on every draft write (save / AI apply).
+  // Used in clientKey so React remounts the form even when hasDraft stays true.
+  draft_saved_at?: string;
   // D4 — Safe Custom CSS draft (independent publish cycle)
   // Live state is stored in store_theme_settings.custom_css (top-level DB column).
   // Only the draft lives here in JSONB until publishCssDraftAction promotes it.
   custom_css_draft?: string;
+  // Set when CSS is published; drives cache-busting version query in storefront layout.
+  css_published_at?: string;
 }
 
 // ── Default Sections Per Theme ─────────────────────────────────

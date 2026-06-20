@@ -156,9 +156,10 @@ export default async function CustomizePage() {
           },
         ];
 
-  // key forces client remount when draft state changes (after publish/discard)
-  // so useState initializes from fresh server props instead of stale client state
-  const clientKey = `${hasDraft ? "draft" : "live"}-${extended.published_at ?? "none"}`;
+  // key forces client remount when draft state changes (after publish/discard/AI apply)
+  // draft_saved_at changes on every draft write, so the form reinitialises even when
+  // hasDraft was already true (e.g. applying a new AI theme over an existing draft).
+  const clientKey = `${hasDraft ? "draft" : "live"}-${extended.draft_saved_at ?? extended.published_at ?? "none"}`;
 
   // live CSS is in the top-level DB column (single source of truth)
   const liveCss = settings?.custom_css ?? "";

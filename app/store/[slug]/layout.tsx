@@ -86,6 +86,13 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
   const footerConfig = extended.footer_config;
   const homepageConfig = extended.homepage_config;
 
+  // Cache-busting: version stamp changes whenever CSS or theme is published,
+  // ensuring CDN/browser immediately fetches the updated stylesheet.
+  const cssTimestamp = extended.css_published_at ?? extended.published_at;
+  const cssHref = cssTimestamp
+    ? `/store/${slug}/theme.css?v=${new Date(cssTimestamp).getTime()}`
+    : `/store/${slug}/theme.css`;
+
   const fontFamily = themeSettings.font_family || "Cairo";
   const announcementCls =
     ANNOUNCEMENT_STYLES[homepageConfig?.announcement_style ?? "primary"] ?? ANNOUNCEMENT_STYLES.primary;
@@ -112,8 +119,8 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
       {/* The actual stylesheet — loads after HTML paint thanks to preload above */}
       <link rel="stylesheet" href={fontUrl} />
 
-      {/* Custom store CSS — scoped to this store's theme */}
-      <link rel="stylesheet" href={`/store/${slug}/theme.css`} />
+      {/* Custom store CSS — versioned for cache-busting on every CSS publish */}
+      <link rel="stylesheet" href={cssHref} />
 
       {/* Announcement bar */}
       {homepageConfig?.show_announcement_bar && homepageConfig.announcement_text && (
