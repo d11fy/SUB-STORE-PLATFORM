@@ -42,7 +42,7 @@ async function readSettings(
   return { rowId: data.id, extended };
 }
 
-// ── Helper: write settings JSONB ─────────────────────────────
+// ── Helper: write settings JSONB atomically ──────────────────
 async function writeSettings(
   storeId: string,
   rowId: string | null,
@@ -50,32 +50,46 @@ async function writeSettings(
   extraCols?: Record<string, unknown>
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  // ExtendedThemeSettings is a typed POJO but Supabase expects Json which requires
-  // a recursive index signature. The runtime shape is valid JSON so this cast is safe.
-  const settingsJson = extended as unknown as Json;
-  const payload = { settings: settingsJson, ...(extraCols ?? {}) };
 
-  if (rowId) {
-    const { error } = await supabase
-      .from("store_theme_settings")
-      .update(payload)
-      .eq("store_id", storeId);
-    return { error: error?.message ?? null };
-  } else {
-    const { data: storeData } = await supabase
-      .from("stores")
-      .select("current_theme_id")
-      .eq("id", storeId)
-      .single();
-    const themeId = storeData?.current_theme_id || null;
-    const { error } = await supabase.from("store_theme_settings").insert({
-      store_id: storeId,
-      theme_id: themeId ?? "",
-      settings: settingsJson,
-      ...(extraCols ?? {}),
-    } as any);
-    return { error: error?.message ?? null };
+  // Map settings keys to merge_theme_settings payload (null values delete the keys)
+  const settingsObj: Record<string, any> = {};
+  const keys: (keyof ExtendedThemeSettings)[] = [
+    "sections_config",
+    "header_config",
+    "footer_config",
+    "homepage_config",
+    "draft_config",
+    "published_at",
+    "draft_saved_at",
+    "custom_css_draft",
+    "css_published_at",
+  ];
+
+  for (const key of keys) {
+    const val = extended[key];
+    settingsObj[key] = val === undefined ? null : val;
   }
+
+  // Perform atomic JSONB merge RPC
+  const { error: mergeError } = await (supabase as any).rpc("merge_theme_settings", {
+    p_store_id: storeId,
+    p_settings: settingsObj,
+  });
+
+  if (mergeError) {
+    return { error: mergeError.message };
+  }
+
+  // If there are other top-level columns to sync (like live theme_id, primary_color, custom_css etc.)
+  if (extraCols && Object.keys(extraCols).length > 0) {
+    const { error: colError } = await supabase
+      .from("store_theme_settings")
+      .update(extraCols as any)
+      .eq("store_id", storeId);
+    if (colError) return { error: colError.message };
+  }
+
+  return { error: null };
 }
 
 // ── 1. Save Draft ─────────────────────────────────────────────
@@ -182,12 +196,16 @@ export async function publishThemeDraftAction(): Promise<{
     );
     if (error) return { success: false, error: "فشل نشر التعديلات: " + error };
 
-    // Also update store logo if provided
-    if (draft.logo_url) {
+    // Also update store logo and description if provided
+    const storeUpdates: Record<string, any> = {};
+    if (draft.logo_url) storeUpdates.logo_url = draft.logo_url;
+    if (draft.store_description) storeUpdates.description = draft.store_description;
+
+    if (Object.keys(storeUpdates).length > 0) {
       const supabase = await createClient();
       await supabase
         .from("stores")
-        .update({ logo_url: draft.logo_url })
+        .update(storeUpdates as any)
         .eq("id", storeId);
     }
 

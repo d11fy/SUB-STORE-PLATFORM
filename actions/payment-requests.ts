@@ -41,7 +41,7 @@ export async function createPaymentRequest(
   }
 
   const ext = fileName.split(".").pop() ?? "png";
-  const filePath = `payment-requests/${storeId}/${Date.now()}.${ext}`;
+  const filePath = `${storeId}/payment-requests/${Date.now()}.${ext}`;
   const adminSupabase = createAdminClient();
 
   const { error: uploadError } = await adminSupabase.storage
@@ -198,13 +198,12 @@ export async function approvePaymentRequest(
     .eq("id", storeId);
 
   // 4. Audit log
-  await adminSupabase.from("audit_logs").insert({
-    actor_id: user.id,
-    actor_role: "platform_admin",
+  await adminSupabase.from("admin_logs").insert({
+    admin_id: user.id,
+    store_id: storeId,
     action: "approve_payment_request",
-    resource_type: "payment_request",
-    resource_id: requestId,
-    details: { storeId, durationDays, plan: req?.plan },
+    description: `الموافقة على طلب دفع الاشتراك للباقة ${req?.plan ?? "starter"}`,
+    metadata: { requestId, durationDays, plan: req?.plan },
   });
 
   // 5. Send email (non-blocking — errors are caught inside)
@@ -264,13 +263,12 @@ export async function rejectPaymentRequest(
     .eq("store_id", storeId);
 
   // Audit log
-  await adminSupabase.from("audit_logs").insert({
-    actor_id: user.id,
-    actor_role: "platform_admin",
+  await adminSupabase.from("admin_logs").insert({
+    admin_id: user.id,
+    store_id: storeId,
     action: "reject_payment_request",
-    resource_type: "payment_request",
-    resource_id: requestId,
-    details: { storeId, reason },
+    description: `رفض طلب دفع الاشتراك: ${reason}`,
+    metadata: { requestId, reason },
   });
 
   // Email notification

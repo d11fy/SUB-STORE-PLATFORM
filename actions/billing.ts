@@ -59,7 +59,7 @@ export async function submitPaymentProof(
   }
 
   const ext = fileName.split(".").pop() ?? "png";
-  const filePath = `subscriptions/${storeId}/proof_${Date.now()}.${ext}`;
+  const filePath = `${storeId}/subscriptions/proof_${Date.now()}.${ext}`;
 
   const adminSupabase = createAdminClient();
 

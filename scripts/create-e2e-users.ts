@@ -158,6 +158,30 @@ async function run() {
   }
   console.log(`✅ Store created successfully (ID: ${store.id})`);
 
+  // 6b. Create subscription for the store
+  console.log("💳 Creating active subscription for store...");
+  const trialStartsAt = new Date();
+  const trialEndsAt = new Date();
+  trialEndsAt.setFullYear(trialEndsAt.getFullYear() + 1); // 1 year in the future
+
+  const { error: subErr } = await supabase
+    .from("subscriptions")
+    .insert({
+      store_id: store.id,
+      package_id: finalPackageId,
+      status: "active",
+      trial_starts_at: trialStartsAt.toISOString(),
+      trial_ends_at: trialEndsAt.toISOString(),
+      current_period_start: trialStartsAt.toISOString(),
+      current_period_end: trialEndsAt.toISOString(),
+    });
+
+  if (subErr) {
+    console.error("❌ Failed to create subscription in database:", subErr.message);
+    process.exit(1);
+  }
+  console.log("✅ Subscription created successfully");
+
   // 7. Add AI Credits for the store
   console.log("🪙 Seeding AI credits...");
   const { error: creditsErr } = await supabase

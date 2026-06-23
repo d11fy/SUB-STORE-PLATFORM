@@ -32,35 +32,38 @@ async function readCssSettings(storeId: string): Promise<{
   return { rowId: data?.id ?? null, extended };
 }
 
-// Writes only the JSONB settings column (draft management).
+// Writes only the JSONB settings column atomically (draft management).
 async function writeCssSettings(
   storeId: string,
   rowId: string | null,
   extended: ExtendedThemeSettings
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const settingsJson = extended as unknown as Json;
 
-  if (rowId) {
-    const { error } = await supabase
-      .from("store_theme_settings")
-      .update({ settings: settingsJson })
-      .eq("store_id", storeId);
-    return { error: error?.message ?? null };
+  const settingsObj: Record<string, any> = {};
+  const keys: (keyof ExtendedThemeSettings)[] = [
+    "sections_config",
+    "header_config",
+    "footer_config",
+    "homepage_config",
+    "draft_config",
+    "published_at",
+    "draft_saved_at",
+    "custom_css_draft",
+    "css_published_at",
+  ];
+
+  for (const key of keys) {
+    const val = extended[key];
+    settingsObj[key] = val === undefined ? null : val;
   }
 
-  const { data: storeRow } = await supabase
-    .from("stores")
-    .select("current_theme_id")
-    .eq("id", storeId)
-    .single();
-
-  const { error } = await supabase.from("store_theme_settings").insert({
-    store_id: storeId,
-    theme_id: storeRow?.current_theme_id ?? "",
-    settings: settingsJson,
+  const { error: mergeError } = await (supabase as any).rpc("merge_theme_settings", {
+    p_store_id: storeId,
+    p_settings: settingsObj,
   });
-  return { error: error?.message ?? null };
+
+  return { error: mergeError?.message ?? null };
 }
 
 // Writes sanitized CSS to the live top-level column (single source of truth).

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Saba Store — AI Server Actions
 // Secure: store_id from auth, credits validation, Zod
 // ============================================================
@@ -240,12 +240,12 @@ export async function saveAiContentToStore(
     const storeId = await getMerchantStoreId();
     const supabase = await createClient();
 
-    // Map target type to the correct field
+    // Map target type to the correct field in draft_config
     const fieldMap: Record<string, string> = {
       hero_title: "hero_title",
       hero_subtitle: "hero_subtitle",
       footer_content: "footer_content",
-      store_description: "description",
+      store_description: "store_description",
     };
 
     const field = fieldMap[validated.data.targetType];
@@ -253,37 +253,14 @@ export async function saveAiContentToStore(
       return { success: false, error: "نوع الحقل غير مدعوم" };
     }
 
-    // If saving to store description, update stores table
-    if (validated.data.targetType === "store_description") {
-      const { error: updateError } = await supabase
-        .from("stores")
-        .update({ description: validated.data.generatedText })
-        .eq("id", storeId);
+    // Save atomically to settings.draft_config via RPC to avoid race conditions and direct live updates
+    const { error: rpcError } = await (supabase as any).rpc("update_theme_settings_jsonb", {
+      p_store_id: storeId,
+      p_path: ["draft_config", field],
+      p_value: validated.data.generatedText,
+    });
 
-      if (updateError) throw updateError;
-    } else {
-      // Save to store_theme_settings
-      const { data: existingSettings } = await supabase
-        .from("store_theme_settings")
-        .select("id")
-        .eq("store_id", storeId)
-        .single();
-
-      if (existingSettings) {
-        const updateObj: Record<string, string> = { [field]: validated.data.generatedText };
-        const { error: updateError } = await supabase
-          .from("store_theme_settings")
-          .update(updateObj as any)
-          .eq("store_id", storeId);
-
-        if (updateError) throw updateError;
-      } else {
-        return {
-          success: false,
-          error: "يرجى اختيار ثيم للمتجر أولاً قبل حفظ المحتوى.",
-        };
-      }
-    }
+    if (rpcError) throw rpcError;
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/settings");

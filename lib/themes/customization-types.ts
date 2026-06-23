@@ -224,6 +224,7 @@ export interface ThemeDraftConfig {
   logo_url?: string | null;
   favicon_url?: string | null;
   footer_content?: string;
+  store_description?: string;
   sections_config: SectionConfig[];
   header_config: HeaderConfig;
   footer_config: FooterConfig;

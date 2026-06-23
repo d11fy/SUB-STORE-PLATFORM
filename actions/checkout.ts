@@ -172,6 +172,7 @@ export async function createCustomerOrder(
       .from("products")
       .select("id, name, price, stock_quantity, track_inventory, is_active")
       .eq("id", item.product_id)
+      .eq("store_id", store.id)
       .single();
 
     if (!product || !product.is_active) {

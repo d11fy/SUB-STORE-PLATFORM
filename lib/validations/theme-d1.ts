@@ -205,6 +205,7 @@ export const themeDraftConfigSchema = z.object({
   logo_url: safeUrlSchema,
   favicon_url: safeUrlSchema,
   footer_content: z.string().trim().max(500).optional().or(z.literal("")),
+  store_description: z.string().trim().max(1000).optional().or(z.literal("")),
   sections_config: sectionsConfigSchema,
   header_config: headerConfigSchema,
   footer_config: footerConfigSchema,
