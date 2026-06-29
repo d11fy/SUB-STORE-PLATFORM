@@ -5,11 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMerchantStoreId } from "./store-utils";
 import { getCurrentUser } from "./auth";
+import { logger } from "@/lib/monitoring/logger";
 import {
   notifyPaymentApproved,
   notifyPaymentRejected,
+  notifyAdminNewPaymentProof,
 } from "@/lib/email/notifications";
 import type { PaymentRequest } from "@/lib/types/database";
+
+const VALID_STATUS_FILTERS = new Set(["all", "pending", "approved", "rejected"]);
 
 const PAGE_SIZE = 20;
 
@@ -78,6 +82,30 @@ export async function createPaymentRequest(
     .update({ status: "pending", payment_proof_url: filePath, admin_note: null })
     .eq("store_id", storeId);
 
+  // Notify admin of the new payment proof (non-blocking)
+  const { data: storeInfo } = await adminSupabase
+    .from("stores")
+    .select("name, slug, email")
+    .eq("id", storeId)
+    .single();
+
+  if (storeInfo) {
+    notifyAdminNewPaymentProof(storeId, {
+      storeName: storeInfo.name,
+      storeSlug: storeInfo.slug,
+      storeEmail: storeInfo.email,
+      plan: plan || "starter",
+      transactionNumber: transactionNumber || null,
+      notes: notes || null,
+      adminPanelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/subscriptions`,
+    }).catch((err: unknown) => {
+      logger.warn("payment_request_email", "Admin payment proof notification failed", {
+        storeId,
+        metadata: { error: String(err) },
+      });
+    });
+  }
+
   revalidatePath("/dashboard/billing");
   revalidatePath("/admin/subscriptions");
   return { success: true, error: null };
@@ -123,6 +151,11 @@ export async function getAdminPaymentRequests(
     return { data: [], count: 0, error: "غير مصرح" };
   }
 
+  // Runtime validation: reject unknown filter values before they reach the DB.
+  const safeStatus = VALID_STATUS_FILTERS.has(statusFilter) ? statusFilter : "all";
+  // Bound search length to prevent extremely long ilike patterns.
+  const safeSearch = search.trim().slice(0, 100);
+
   const supabase = createAdminClient();
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -133,11 +166,11 @@ export async function getAdminPaymentRequests(
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  if (statusFilter !== "all") {
-    query = query.eq("status", statusFilter as "pending" | "approved" | "rejected");
+  if (safeStatus !== "all") {
+    query = query.eq("status", safeStatus as "pending" | "approved" | "rejected");
   }
-  if (search) {
-    query = query.ilike("transaction_number", `%${search}%`);
+  if (safeSearch) {
+    query = query.ilike("transaction_number", `%${safeSearch}%`);
   }
 
   const { data, count, error } = await query;
@@ -175,7 +208,8 @@ export async function approvePaymentRequest(
     .eq("id", requestId);
   if (reqError) return { success: false, error: "فشل تحديث الطلب" };
 
-  // 2. Update subscription
+  // 2. Update subscription — reset expiry_warning_sent_at so the new
+  //    billing cycle gets a fresh 7-day warning from the cron job.
   await adminSupabase
     .from("subscriptions")
     .update({
@@ -184,6 +218,7 @@ export async function approvePaymentRequest(
       plan: req?.plan ?? null,
       current_period_start: now.toISOString(),
       current_period_end: endsAt.toISOString(),
+      expiry_warning_sent_at: null,
     })
     .eq("store_id", storeId);
 
@@ -215,7 +250,12 @@ export async function approvePaymentRequest(
       req?.plan ?? "starter",
       endsAt.toISOString(),
       storeId
-    ).catch(() => {});
+    ).catch((err: unknown) => {
+      logger.warn("payment_approved_email", "Approval notification email failed", {
+        storeId,
+        metadata: { error: String(err) },
+      });
+    });
   }
 
   revalidatePath("/admin/subscriptions");
@@ -274,10 +314,51 @@ export async function rejectPaymentRequest(
   // Email notification
   const storeData = req?.stores as any;
   if (storeData?.email) {
-    notifyPaymentRejected(storeData.email, storeData.name, reason.trim(), storeId).catch(() => {});
+    notifyPaymentRejected(storeData.email, storeData.name, reason.trim(), storeId).catch((err: unknown) => {
+      logger.warn("payment_rejected_email", "Rejection notification email failed", {
+        storeId,
+        metadata: { error: String(err) },
+      });
+    });
   }
 
   revalidatePath("/admin/subscriptions");
   revalidatePath("/dashboard/billing");
   return { success: true, error: null };
+}
+
+// ============================================================
+// ADMIN: Run global subscription expiry job
+// ============================================================
+// Calls expire_overdue_subscriptions() atomically — all stores whose
+// current_period_end < now() are expired in one Postgres CTE transaction.
+// Can also be triggered automatically via /api/cron/check-subscriptions.
+export async function runSubscriptionExpiryJob(): Promise<{
+  success: boolean;
+  expiredCount: number;
+  error: string | null;
+}> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "platform_admin") {
+    return { success: false, expiredCount: 0, error: "غير مصرح" };
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data, error } = await adminSupabase.rpc("expire_overdue_subscriptions");
+
+  if (error) {
+    return { success: false, expiredCount: 0, error: error.message };
+  }
+
+  const result = data as { expired_count: number; run_at: string };
+
+  await adminSupabase.from("admin_logs").insert({
+    admin_id: user.id,
+    action: "run_subscription_expiry_job",
+    description: `تشغيل مهمة انتهاء الاشتراكات — تم إيقاف ${result.expired_count} متجر`,
+    metadata: result,
+  });
+
+  revalidatePath("/admin/subscriptions");
+  return { success: true, expiredCount: result.expired_count, error: null };
 }

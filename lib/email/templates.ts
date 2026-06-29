@@ -165,3 +165,215 @@ export function subscriptionReactivated(storeName: string, plan: string): string
     ${btn("الذهاب للوحة التحكم", `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`, "#22c55e")}
   `);
 }
+
+// ============================================================
+// TEMPLATE 6: Order confirmation (sent to customer)
+// ============================================================
+
+export interface OrderEmailItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface OrderConfirmationData {
+  orderNumber: string | number;
+  storeName: string;
+  storeEmail?: string | null;
+  customerName: string;
+  items: OrderEmailItem[];
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+  currency: string;
+  city?: string;
+  address?: string;
+  notes?: string | null;
+}
+
+function formatAmount(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("ar-EG", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+function itemsTable(items: OrderEmailItem[], currency: string): string {
+  const rows = items
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#334155;">${i.name}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;text-align:center;">${i.quantity}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#334155;text-align:left;">${formatAmount(i.price * i.quantity, currency)}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:20px 0;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="padding:10px 12px;font-size:12px;color:#64748b;font-weight:600;text-align:right;">المنتج</th>
+          <th style="padding:10px 12px;font-size:12px;color:#64748b;font-weight:600;text-align:center;">الكمية</th>
+          <th style="padding:10px 12px;font-size:12px;color:#64748b;font-weight:600;text-align:left;">المجموع</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+export function orderConfirmation(data: OrderConfirmationData): string {
+  const {
+    orderNumber,
+    storeName,
+    storeEmail,
+    customerName,
+    items,
+    subtotal,
+    shippingCost,
+    total,
+    currency,
+    city,
+    address,
+    notes,
+  } = data;
+
+  const deliverySection =
+    city || address
+      ? `<div style="margin:16px 0;padding:16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#64748b;">عنوان التوصيل</p>
+          <p style="margin:0;font-size:13px;color:#334155;">${[city, address].filter(Boolean).join(" — ")}</p>
+        </div>`
+      : "";
+
+  const notesSection = notes
+    ? `<div style="margin:16px 0;padding:16px;background:#fffbeb;border-radius:10px;border:1px solid #fde68a;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;">ملاحظاتك</p>
+        <p style="margin:0;font-size:13px;color:#78350f;">${notes}</p>
+      </div>`
+    : "";
+
+  const replyInfo = storeEmail
+    ? `<p style="color:#64748b;font-size:13px;margin:16px 0 0;">للتواصل مع المتجر: <a href="mailto:${storeEmail}" style="color:#2563eb;">${storeEmail}</a></p>`
+    : "";
+
+  return wrap(`
+    <p style="margin:0 0 8px;font-size:13px;color:#64748b;">تأكيد الطلب</p>
+    <h1 style="margin:0 0 6px;font-size:22px;color:#1e293b;">تم استلام طلبك بنجاح!</h1>
+    <p style="margin:0 0 20px;font-size:13px;color:#64748b;">
+      طلب رقم <strong style="color:#1e293b;">#${orderNumber}</strong>
+      من متجر <strong style="color:#1e293b;">${storeName}</strong>
+    </p>
+    ${badge("مؤكد", "#22c55e")}
+
+    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">
+      <p style="margin:0;font-size:14px;color:#166534;">
+        مرحباً <strong>${customerName}</strong>،
+        شكراً لطلبك! سيتم التواصل معك قريباً لتأكيد التوصيل.
+      </p>
+    </div>
+
+    ${itemsTable(items, currency)}
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#64748b;">المجموع الفرعي</td>
+        <td style="padding:6px 0;font-size:13px;color:#334155;text-align:left;">${formatAmount(subtotal, currency)}</td>
+      </tr>
+      ${
+        shippingCost > 0
+          ? `<tr>
+              <td style="padding:6px 0;font-size:13px;color:#64748b;">الشحن</td>
+              <td style="padding:6px 0;font-size:13px;color:#334155;text-align:left;">${formatAmount(shippingCost, currency)}</td>
+            </tr>`
+          : `<tr>
+              <td style="padding:6px 0;font-size:13px;color:#64748b;">الشحن</td>
+              <td style="padding:6px 0;font-size:13px;color:#22c55e;text-align:left;font-weight:600;">مجاني</td>
+            </tr>`
+      }
+      <tr style="border-top:2px solid #e2e8f0;">
+        <td style="padding:10px 0 0;font-size:15px;font-weight:700;color:#1e293b;">الإجمالي</td>
+        <td style="padding:10px 0 0;font-size:15px;font-weight:700;color:#1e293b;text-align:left;">${formatAmount(total, currency)}</td>
+      </tr>
+    </table>
+
+    ${deliverySection}
+    ${notesSection}
+    ${replyInfo}
+  `);
+}
+
+// ============================================================
+// TEMPLATE 7: Admin alert — new payment proof uploaded
+// ============================================================
+
+export interface AdminPaymentProofData {
+  storeName: string;
+  storeSlug: string;
+  storeEmail: string | null;
+  plan: string;
+  transactionNumber: string | null;
+  notes: string | null;
+  adminPanelUrl: string;
+}
+
+export function adminPaymentProofAlert(data: AdminPaymentProofData): string {
+  const { storeName, storeSlug, storeEmail, plan, transactionNumber, notes, adminPanelUrl } = data;
+
+  return wrap(`
+    <p style="margin:0 0 8px;font-size:13px;color:#64748b;">إشعار إداري</p>
+    <h1 style="margin:0 0 20px;font-size:22px;color:#1e293b;">طلب اشتراك جديد يحتاج مراجعة</h1>
+    ${badge("قيد المراجعة", "#f59e0b")}
+
+    <div style="margin:24px 0;padding:20px;background:#fffbeb;border-radius:12px;border:1px solid #fde68a;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:6px 0;font-size:13px;color:#92400e;font-weight:600;width:40%;">المتجر</td>
+          <td style="padding:6px 0;font-size:13px;color:#1e293b;">
+            ${storeName} <span style="color:#64748b;">(${storeSlug})</span>
+          </td>
+        </tr>
+        ${
+          storeEmail
+            ? `<tr>
+                <td style="padding:6px 0;font-size:13px;color:#92400e;font-weight:600;">البريد</td>
+                <td style="padding:6px 0;font-size:13px;color:#1e293b;">${storeEmail}</td>
+              </tr>`
+            : ""
+        }
+        <tr>
+          <td style="padding:6px 0;font-size:13px;color:#92400e;font-weight:600;">الباقة المطلوبة</td>
+          <td style="padding:6px 0;font-size:13px;color:#1e293b;">${plan}</td>
+        </tr>
+        ${
+          transactionNumber
+            ? `<tr>
+                <td style="padding:6px 0;font-size:13px;color:#92400e;font-weight:600;">رقم العملية</td>
+                <td style="padding:6px 0;font-size:13px;color:#1e293b;font-family:monospace;">${transactionNumber}</td>
+              </tr>`
+            : ""
+        }
+        ${
+          notes
+            ? `<tr>
+                <td style="padding:6px 0;font-size:13px;color:#92400e;font-weight:600;">ملاحظات</td>
+                <td style="padding:6px 0;font-size:13px;color:#1e293b;">${notes}</td>
+              </tr>`
+            : ""
+        }
+      </table>
+    </div>
+
+    <p style="color:#475569;font-size:14px;line-height:1.7;">
+      يرجى مراجعة إثبات الدفع المرفق والموافقة أو رفض الطلب من لوحة التحكم الإدارية.
+    </p>
+    ${btn("مراجعة الطلب الآن", adminPanelUrl, "#f59e0b")}
+  `);
+}

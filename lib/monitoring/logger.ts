@@ -1,75 +1,41 @@
 // ============================================================
-// Saba Store — Structured Server Logger
-// Dual-channel: structured console (Vercel captures) + optional DB
+// Saba Store — Structured Logger
+//
+// Convenience wrapper around the error tracker.
+// All .error() calls are routed through capture() which gives
+// full stack traces, fingerprinting, and Sentry/webhook delivery.
+// .info() and .warn() emit lightweight structured events without
+// the overhead of stack capture.
+//
+// Existing call sites require no changes — the API is identical.
 // ============================================================
 
-type LogLevel = "info" | "warn" | "error";
-
-interface LogEntry {
-  level: LogLevel;
-  action: string;
-  message: string;
-  userId?: string | null;
-  storeId?: string | null;
-  route?: string | null;
-  errorCode?: string | null;
-  metadata?: Record<string, unknown>;
-  timestamp: string;
-}
-
-function emit(entry: LogEntry) {
-  const line = JSON.stringify(entry);
-  if (entry.level === "error") {
-    console.error(line);
-  } else if (entry.level === "warn") {
-    console.warn(line);
-  } else {
-    console.log(line);
-  }
-}
-
-// ── Public API ──────────────────────────────────────────────
+import { capture, captureMessage } from "./error-tracker";
 
 export const logger = {
   info(
     action: string,
     message: string,
-    ctx?: Omit<LogEntry, "level" | "action" | "message" | "timestamp">
+    ctx?: { userId?: string | null; storeId?: string | null; route?: string | null; metadata?: Record<string, unknown> }
   ) {
-    emit({ level: "info", action, message, timestamp: new Date().toISOString(), ...ctx });
+    captureMessage(message, "info", { action, ...ctx });
   },
 
   warn(
     action: string,
     message: string,
-    ctx?: Omit<LogEntry, "level" | "action" | "message" | "timestamp">
+    ctx?: { userId?: string | null; storeId?: string | null; route?: string | null; metadata?: Record<string, unknown> }
   ) {
-    emit({ level: "warn", action, message, timestamp: new Date().toISOString(), ...ctx });
+    captureMessage(message, "warn", { action, ...ctx });
   },
 
   error(
     action: string,
     error: unknown,
-    ctx?: Omit<LogEntry, "level" | "action" | "message" | "timestamp">
+    ctx?: { userId?: string | null; storeId?: string | null; route?: string | null; metadata?: Record<string, unknown> }
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === "object" && error !== null
-        ? JSON.stringify(error)
-        : String(error);
-
-    const errorCode =
-      typeof error === "object" && error !== null && "code" in error
-        ? String((error as { code: unknown }).code)
-        : null;
-
-    emit({
-      level: "error",
+    capture(error instanceof Error ? error : new Error(String(error)), {
       action,
-      message,
-      errorCode,
-      timestamp: new Date().toISOString(),
       ...ctx,
     });
   },
@@ -80,30 +46,32 @@ export const logger = {
     error: unknown,
     ctx: { userId?: string | null; storeId?: string | null; route?: string }
   ) {
-    logger.error(action, error, ctx);
+    capture(error instanceof Error ? error : new Error(String(error)), {
+      action,
+      ...ctx,
+    });
   },
 
-  // Auth-specific events
+  // Auth-specific events — warn level, no stack needed
   authFailure(route: string, reason: string, userId?: string | null) {
-    emit({
-      level: "warn",
+    captureMessage(reason, "warn", {
       action: "auth_failure",
-      message: reason,
       userId,
       route,
-      timestamp: new Date().toISOString(),
     });
   },
 
-  // RLS / security events
+  // RLS / security events — error level with stack
   rlsViolation(action: string, storeId: string | null, userId: string | null) {
-    emit({
-      level: "error",
-      action: "rls_violation",
-      message: `RLS policy blocked access in ${action}`,
-      userId,
-      storeId,
-      timestamp: new Date().toISOString(),
-    });
+    capture(
+      new Error(`RLS policy blocked access in ${action}`),
+      {
+        action: "rls_violation",
+        userId,
+        storeId,
+        metadata: { blockedAction: action },
+      },
+      "error"
+    );
   },
 };

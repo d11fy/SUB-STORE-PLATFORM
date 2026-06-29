@@ -10,29 +10,8 @@ import { getMerchantStoreId } from "./store-utils";
 import { getAiProvider } from "@/lib/ai/ai-provider";
 import { getToolMeta } from "@/lib/ai/prompts";
 import { aiGenerateSchema, aiSaveContentSchema } from "@/lib/validations/ai";
+import { aiGenerationRateLimit } from "@/lib/rate-limit";
 import type { AiToolType } from "@/lib/ai/mock-responses";
-
-// ============================================================
-// SIMPLE RATE LIMITER (in-memory, per store)
-// ============================================================
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(storeId: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(storeId);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(storeId, { count: 1, resetAt: now + 60_000 }); // 1 minute window
-    return true;
-  }
-
-  if (entry.count >= 10) {
-    return false; // 10 requests per minute
-  }
-
-  entry.count++;
-  return true;
-}
 
 // ============================================================
 // GENERATE AI CONTENT
@@ -60,8 +39,8 @@ export async function generateAiContent(
     // 2. Get store from authenticated user (NEVER from client)
     const storeId = await getMerchantStoreId();
 
-    // 3. Rate limit check
-    if (!checkRateLimit(storeId)) {
+    // 3. Rate limit check (10 generations per minute per store)
+    if (!aiGenerationRateLimit(storeId).allowed) {
       return {
         data: null,
         error: "تم تجاوز الحد المسموح من الطلبات. يرجى الانتظار دقيقة ثم المحاولة مجدداً.",

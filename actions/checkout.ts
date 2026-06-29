@@ -1,8 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
 import { logger } from "@/lib/monitoring/logger";
+import { notifyOrderConfirmation } from "@/lib/email/notifications";
+import { checkoutRateLimit } from "@/lib/rate-limit";
 import type { Order, OrderItem } from "@/lib/types/database";
 
 // Interface for checkout cart items passed from Zustand
@@ -46,21 +49,32 @@ export async function validateAndCalculateOrder(
     return { subtotal: 0, shippingCost: 0, total: 0, error: "المتجر غير نشط حالياً" };
   }
 
-  // Calculate subtotal from products in database to prevent client tampering
+  // Calculate subtotal from products in database to prevent client tampering.
+  // SECURITY: Every product is scoped to this store — prevents cross-store price reads (IDOR).
+  // A single batch query is used so a mismatched count (items not in this store) is caught
+  // before any pricing is trusted.
+  const productIds = items.map((i) => i.product_id);
+  const { data: storeProducts } = await supabase
+    .from("products")
+    .select("id, price, is_active")
+    .in("id", productIds)
+    .eq("store_id", store.id);
+
+  if (!storeProducts || storeProducts.length !== items.length) {
+    return { subtotal: 0, shippingCost: 0, total: 0, error: "بعض المنتجات غير متاحة في هذا المتجر" };
+  }
+
+  const priceMap = new Map(storeProducts.map((p) => [p.id, p]));
+
   let subtotal = 0;
   for (const item of items) {
-    const { data: product } = await supabase
-      .from("products")
-      .select("price, compare_price, is_active")
-      .eq("id", item.product_id)
-      .single();
+    const product = priceMap.get(item.product_id);
 
     if (!product || !product.is_active) {
       return { subtotal: 0, shippingCost: 0, total: 0, error: `المنتج ${item.name} غير متوفر حالياً` };
     }
 
-    const price = product.price; // use database price
-    subtotal += price * item.quantity;
+    subtotal += product.price * item.quantity;
   }
 
   // Digital stores / no shipping: skip shipping lookup entirely
@@ -130,12 +144,23 @@ export async function createCustomerOrder(
     return { success: false, orderId: null, orderNumber: null, error: validated.error.issues[0]?.message ?? "بيانات غير صالحة" };
   }
 
+  // IP-based rate limiting: 5 orders per minute per client IP.
+  const h = await headers();
+  const clientIp =
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    h.get("x-real-ip") ??
+    "unknown";
+  const rl = checkoutRateLimit(clientIp);
+  if (!rl.allowed) {
+    return { success: false, orderId: null, orderNumber: null, error: "طلبات كثيرة، يرجى المحاولة بعد قليل" };
+  }
+
   const supabase = createAdminClient();
 
   // 1. Fetch store
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, status, requires_shipping")
+    .select("id, status, requires_shipping, name, email, currency")
     .eq("slug", storeSlug)
     .single();
 
@@ -163,17 +188,32 @@ export async function createCustomerOrder(
   const deliveryCity = validated.data.city?.trim() ?? "";
   const deliveryAddress = validated.data.address?.trim() ?? "";
 
-  // 2. Calculate subtotal & check inventory
+  // 2. Validate cart & calculate subtotal
+  //
+  // SECURITY: Batch-fetch all submitted product IDs scoped to this store.
+  // Any product ID that doesn't belong to store.id is silently excluded from
+  // the result set, making the length check below fail — this blocks all IDOR
+  // cross-store purchase attempts at the DB query level.
+  const cartProductIds = items.map((i) => i.product_id);
+  const { data: ownedProducts } = await supabase
+    .from("products")
+    .select("id, name, price, stock_quantity, track_inventory, is_active")
+    .in("id", cartProductIds)
+    .eq("store_id", store.id);
+
+  // Defensive count check: if any submitted product_id was from a different
+  // store or didn't exist, it won't appear in ownedProducts.
+  if (!ownedProducts || ownedProducts.length !== items.length) {
+    return { success: false, orderId: null, orderNumber: null, error: "بعض المنتجات غير متاحة في هذا المتجر" };
+  }
+
+  const productMap = new Map(ownedProducts.map((p) => [p.id, p]));
+
   let subtotal = 0;
   const validatedItems: { id: string; name: string; price: number; quantity: number; stock: number }[] = [];
 
   for (const item of items) {
-    const { data: product } = await supabase
-      .from("products")
-      .select("id, name, price, stock_quantity, track_inventory, is_active")
-      .eq("id", item.product_id)
-      .eq("store_id", store.id)
-      .single();
+    const product = productMap.get(item.product_id);
 
     if (!product || !product.is_active) {
       return { success: false, orderId: null, orderNumber: null, error: `المنتج ${item.name} غير متوفر حالياً` };
@@ -290,7 +330,7 @@ export async function createCustomerOrder(
       .single();
 
     if (customerInsertError || !newCustomer) {
-      console.error("Customer creation error:", customerInsertError);
+      logger.error("createCustomerOrder", customerInsertError ?? new Error("no customer returned"), { storeId: store.id });
       return { success: false, orderId: null, orderNumber: null, error: "حدث خطأ أثناء معالجة بيانات المشتري" };
     }
     customerId = newCustomer.id;
@@ -345,14 +385,40 @@ export async function createCustomerOrder(
     });
 
     if (itemInsertError) {
-      console.error("Failed to insert order item:", itemInsertError);
+      logger.error("createCustomerOrder_item", itemInsertError, { storeId: store.id });
     }
 
-    // Decrement inventory
+    // Decrement inventory — store_id filter is defense-in-depth;
+    // item.id was already validated against store.id above.
     await supabase
       .from("products")
       .update({ stock_quantity: Math.max(0, item.stock - item.quantity) })
-      .eq("id", item.id);
+      .eq("id", item.id)
+      .eq("store_id", store.id);
+  }
+
+  // Fire-and-forget order confirmation email (non-blocking)
+  // Only sent when the customer provided an email at checkout.
+  if (validated.data.email) {
+    notifyOrderConfirmation(validated.data.email, store.id, {
+      orderNumber: order.order_number ?? order.id.slice(0, 8).toUpperCase(),
+      storeName: (store as any).name ?? storeSlug,
+      storeEmail: (store as any).email ?? null,
+      customerName: validated.data.full_name,
+      items: validatedItems.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      subtotal,
+      shippingCost,
+      total: totalAmount,
+      currency: (store as any).currency ?? "ILS",
+      city: deliveryCity || undefined,
+      address: deliveryAddress || undefined,
+      notes: validated.data.notes ?? null,
+    }).catch((err: unknown) => {
+      logger.warn("checkout_email", "Order confirmation email failed", {
+        storeId: store.id,
+        metadata: { error: String(err) },
+      });
+    });
   }
 
   return {
@@ -422,7 +488,7 @@ export async function submitPaymentProof(
     });
 
   if (uploadError) {
-    console.error("Storage upload error:", uploadError);
+    logger.error("submitPaymentProof_upload", uploadError);
     return { success: false, error: "حدث خطأ أثناء رفع ملف إثبات الدفع" };
   }
 
@@ -437,7 +503,7 @@ export async function submitPaymentProof(
   });
 
   if (insertError) {
-    console.error("Payment proof DB record insert error:", insertError);
+    logger.error("submitPaymentProof_insert", insertError);
     return { success: false, error: "فشل حفظ تفاصيل إثبات الدفع، يرجى المحاولة مرة أخرى" };
   }
 

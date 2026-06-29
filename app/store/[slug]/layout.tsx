@@ -102,7 +102,10 @@ export default async function StoreLayout({ children, params }: StoreLayoutProps
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/20 selection:text-primary overflow-x-hidden"
+      // store-{id} is the CSS scope anchor. Every custom CSS rule served by
+      // /store/[slug]/theme.css is wrapped under .store-{id} so it can only
+      // match descendants of this element — tenant CSS isolation boundary.
+      className={`min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/20 selection:text-primary overflow-x-hidden store-${store.id}`}
       dir="rtl"
       style={{
         "--primary": themeSettings.primary_color,

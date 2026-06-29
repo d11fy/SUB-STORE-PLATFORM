@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "./auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logger } from "@/lib/monitoring/logger";
 import type { Database } from "@/lib/types/database";
 
 // ============================================================
@@ -99,7 +100,7 @@ export async function getAdminStores() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("getAdminStores Error:", error);
+    logger.error("getAdminStores", error);
     return [];
   }
   return data as any[];
@@ -121,7 +122,7 @@ export async function getAdminStoreDetails(storeId: string) {
     .single();
 
   if (error) {
-    console.error("getAdminStoreDetails Error:", error);
+    logger.error("getAdminStoreDetails", error);
     return null;
   }
   return data as any;
@@ -163,7 +164,7 @@ export async function getAdminMerchants() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("getAdminMerchants Error:", error);
+    logger.error("getAdminMerchants", error);
     return [];
   }
   return data as any[];
@@ -360,7 +361,7 @@ export async function getAdminAllUsers(roleFilter?: string) {
 
   const { data, error } = await query;
   if (error) {
-    console.error("getAdminAllUsers error:", error);
+    logger.error("getAdminAllUsers", error);
     return [];
   }
   return data as any[];
@@ -736,7 +737,7 @@ export async function getAdminLogsPage(page: number = 1, actionFilter?: string) 
 
   const { data, count, error } = await query;
   if (error) {
-    console.error("getAdminLogsPage error:", error);
+    logger.error("getAdminLogsPage", error);
     return { logs: [], total: 0, totalPages: 0 };
   }
 

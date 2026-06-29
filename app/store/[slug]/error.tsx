@@ -1,13 +1,32 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+
+function reportToServer(error: Error & { digest?: string }) {
+  const payload = JSON.stringify({
+    message: error.message,
+    stack:   error.stack?.slice(0, 2000),
+    digest:  error.digest ?? null,
+    route:   typeof window !== "undefined" ? window.location.pathname : null,
+  });
+  if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+    navigator.sendBeacon("/api/monitoring/report", new Blob([payload], { type: "application/json" }));
+  } else {
+    fetch("/api/monitoring/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(() => {});
+  }
+}
 
 interface StorefrontErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
 }
 
-export default function StorefrontError({ reset }: StorefrontErrorProps) {
+export default function StorefrontError({ error, reset }: StorefrontErrorProps) {
+  useEffect(() => {
+    reportToServer(error);
+  }, [error]);
+
   return (
     <div
       className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center font-cairo"

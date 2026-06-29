@@ -1,10 +1,61 @@
+// ============================================================
+// Email sender — dual-driver abstraction
+//
+// Driver priority:
+//   1. Resend  — when RESEND_API_KEY is set (install: npm i resend)
+//   2. SMTP    — when SMTP_HOST / platform_settings are configured
+//
+// Both drivers share the same EmailPayload interface so callers
+// never need to know which transport is active.
+// ============================================================
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// ============================================================
-// SMTP CONFIG — reads from platform_settings table, falls back to env vars
-// In-memory cache: 5-min TTL so serverless restarts don't hit DB every email
-// ============================================================
+export interface EmailPayload {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+  replyTo?: string;
+}
+
+export interface SendResult {
+  success: boolean;
+  error?: string;
+}
+
+// ── Resend driver ─────────────────────────────────────────────────────────────
+
+async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
+  // Dynamic import so the package is truly optional at startup.
+  // If not installed: `npm install resend`
+  const mod = await import("resend").catch(() => null);
+  if (!mod) {
+    return { success: false, error: "resend package is not installed — run: npm install resend" };
+  }
+
+  const { Resend } = mod as typeof import("resend");
+  const client = new Resend(process.env.RESEND_API_KEY!);
+  const from = process.env.RESEND_FROM ?? `سبأ ستور <noreply@sabastore.com>`;
+
+  const { error } = await client.emails.send({
+    from,
+    to: Array.isArray(payload.to) ? payload.to : [payload.to],
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    reply_to: payload.replyTo,
+  });
+
+  if (error) {
+    console.error("[email/resend]", error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+// ── SMTP driver ───────────────────────────────────────────────────────────────
+
 interface SmtpConfig {
   host: string;
   port: number;
@@ -13,10 +64,10 @@ interface SmtpConfig {
   from: string;
 }
 
-let _cache: { config: SmtpConfig; expires: number } | null = null;
+let _smtpCache: { config: SmtpConfig; expires: number } | null = null;
 
 async function getSmtpConfig(): Promise<SmtpConfig | null> {
-  if (_cache && Date.now() < _cache.expires) return _cache.config;
+  if (_smtpCache && Date.now() < _smtpCache.expires) return _smtpCache.config;
 
   const supabase = createAdminClient();
   const { data } = await supabase
@@ -29,7 +80,6 @@ async function getSmtpConfig(): Promise<SmtpConfig | null> {
     if (value) kv[key] = value;
   });
 
-  // Fall back to env vars if DB not configured
   const host = kv.smtp_host || process.env.SMTP_HOST;
   const user = kv.smtp_user || process.env.SMTP_USER;
   const pass = kv.smtp_pass || process.env.SMTP_PASS;
@@ -44,51 +94,58 @@ async function getSmtpConfig(): Promise<SmtpConfig | null> {
     from: kv.smtp_from || process.env.SMTP_FROM || `"سبأ ستور" <noreply@sabastore.com>`,
   };
 
-  _cache = { config, expires: Date.now() + 5 * 60 * 1000 };
+  _smtpCache = { config, expires: Date.now() + 5 * 60 * 1000 };
   return config;
 }
 
-// ============================================================
-// SEND
-// ============================================================
-export interface EmailPayload {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
+async function sendViaSmtp(payload: EmailPayload): Promise<SendResult> {
+  const config = await getSmtpConfig();
+  if (!config) {
+    return {
+      success: false,
+      error: "لم يتم إعداد البريد — أضف RESEND_API_KEY أو بيانات SMTP في إعدادات المنصة",
+    };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: { user: config.user, pass: config.pass },
+    tls: { rejectUnauthorized: false },
+  });
+
+  await transporter.sendMail({
+    from: config.from,
+    to: Array.isArray(payload.to) ? payload.to.join(", ") : payload.to,
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    replyTo: payload.replyTo,
+  });
+
+  return { success: true };
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<{ success: boolean; error?: string }> {
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Send an email using the configured driver.
+ * Resend is used when RESEND_API_KEY is set; SMTP otherwise.
+ */
+export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
   try {
-    const config = await getSmtpConfig();
-    if (!config) {
-      return { success: false, error: "إعدادات البريد غير مكتملة — قم بضبطها من إعدادات المنصة" };
+    if (process.env.RESEND_API_KEY) {
+      return await sendViaResend(payload);
     }
-
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.port === 465,
-      auth: { user: config.user, pass: config.pass },
-      tls: { rejectUnauthorized: false },
-    });
-
-    await transporter.sendMail({
-      from: config.from,
-      to: payload.to,
-      subject: payload.subject,
-      html: payload.html,
-      text: payload.text,
-    });
-
-    return { success: true };
+    return await sendViaSmtp(payload);
   } catch (err: any) {
-    console.error("[email] send failed:", err?.message);
+    console.error("[email] unexpected error:", err?.message);
     return { success: false, error: err?.message };
   }
 }
 
-// Invalidate cache (call after saving new SMTP settings)
+/** Invalidate SMTP config cache — call after updating SMTP settings. */
 export function invalidateSmtpCache() {
-  _cache = null;
+  _smtpCache = null;
 }

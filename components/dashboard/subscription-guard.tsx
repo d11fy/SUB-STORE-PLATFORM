@@ -82,7 +82,51 @@ function LockGate({ state, adminNote }: { state: LockState; adminNote: string | 
     );
   }
 
-  // locked / no_sub / trialing-expired
+  if (state === "expired") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
+          <AlertTriangle className="h-8 w-8 text-red-600" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h2 className="font-cairo font-bold text-xl text-foreground">انتهى اشتراكك</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            انتهت صلاحية اشتراكك. متجرك موقوف مؤقتاً حتى تقوم بتجديد الاشتراك.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/billing"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+        >
+          تجديد الاشتراك
+        </Link>
+      </div>
+    );
+  }
+
+  if (state === "suspended") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
+          <XCircle className="h-8 w-8 text-red-600" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h2 className="font-cairo font-bold text-xl text-foreground">تم إيقاف متجرك</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            تم إيقاف متجرك من قبل إدارة المنصة. يرجى التواصل مع الدعم الفني لمعرفة السبب.
+          </p>
+        </div>
+        <Link
+          href="mailto:support@sabastore.com"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+        >
+          التواصل مع الدعم
+        </Link>
+      </div>
+    );
+  }
+
+  // locked / no_sub / trial expired
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8 text-center">
       <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center">

@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Arabic RTL support
   experimental: {
     // optimizeCss: true,
+    // Enables instrumentation.ts lifecycle hooks (register, onRequestError).
+    // Stable in Next.js 15.3+; guarded here for earlier 15.x compatibility.
+    instrumentationHook: true,
   },
   images: {
     remotePatterns: [

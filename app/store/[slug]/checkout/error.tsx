@@ -1,7 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
+function reportToServer(error: Error & { digest?: string }) {
+  const payload = JSON.stringify({
+    message: error.message,
+    stack:   error.stack?.slice(0, 2000),
+    digest:  error.digest ?? null,
+    route:   typeof window !== "undefined" ? window.location.pathname : null,
+  });
+  if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+    navigator.sendBeacon("/api/monitoring/report", new Blob([payload], { type: "application/json" }));
+  } else {
+    fetch("/api/monitoring/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(() => {});
+  }
+}
 
 export default function CheckoutError({
   error,
@@ -11,6 +26,10 @@ export default function CheckoutError({
   reset: () => void;
 }) {
   const params = useParams();
+
+  useEffect(() => {
+    reportToServer(error);
+  }, [error]);
   const slug = params?.slug as string | undefined;
 
   return (

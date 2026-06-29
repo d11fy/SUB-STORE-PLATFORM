@@ -12,7 +12,67 @@ interface TrialBannerProps {
 }
 
 export function TrialBanner({ status, daysRemaining, adminNote }: TrialBannerProps) {
-  if (status === "active") return null;
+  // Active subscription — show renewal reminder in the last 7 days
+  if (status === "active") {
+    if (daysRemaining > 7 || daysRemaining === 0) return null;
+    const urgent = daysRemaining <= 2;
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3 px-4 py-2.5 text-sm font-medium border-b",
+          urgent
+            ? "bg-red-50 border-red-200 text-red-800"
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 shrink-0" />
+          <span>
+            {daysRemaining === 1
+              ? "ينتهي اشتراكك غداً — جدد الآن لتجنب انقطاع الخدمة"
+              : `ينتهي اشتراكك خلال ${daysRemaining} أيام`}
+          </span>
+        </div>
+        <Link
+          href="/dashboard/billing"
+          className={cn(
+            "shrink-0 text-xs px-3 py-1 rounded-full font-semibold transition-colors",
+            urgent
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "bg-amber-600 text-white hover:bg-amber-700"
+          )}
+        >
+          تجديد الاشتراك
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === "expired") {
+    return (
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm font-medium border-b bg-red-50 border-red-200 text-red-800">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>انتهى اشتراكك — متجرك موقوف مؤقتاً حتى يتم التجديد</span>
+        </div>
+        <Link
+          href="/dashboard/billing"
+          className="shrink-0 text-xs px-3 py-1 rounded-full font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+        >
+          تجديد الاشتراك
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === "suspended") {
+    return (
+      <div className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b bg-red-50 border-red-200 text-red-800">
+        <XCircle className="h-4 w-4 shrink-0" />
+        <span>متجرك موقوف من قبل الإدارة — تواصل مع الدعم</span>
+      </div>
+    );
+  }
 
   if (status === "trialing" && daysRemaining > 3) return null;
 
@@ -83,12 +143,12 @@ export function TrialBanner({ status, daysRemaining, adminNote }: TrialBannerPro
     );
   }
 
-  // locked / no_sub
+  // locked / no_sub — trial expired without renewal
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm font-medium border-b bg-red-50 border-red-200 text-red-800">
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span>انتهت فترتك التجريبية — متجرك موقوف مؤقتاً</span>
+        <span>انتهت فترتك التجريبية — اشترك الآن لتفعيل متجرك</span>
       </div>
       <Link
         href="/dashboard/billing"
