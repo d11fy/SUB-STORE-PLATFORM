@@ -224,6 +224,7 @@ export interface Database {
           payment_proof_url: string | null;
           admin_note: string | null;
           plan: string | null;
+          expiry_warning_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };

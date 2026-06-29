@@ -218,8 +218,8 @@ export async function approvePaymentRequest(
       plan: req?.plan ?? null,
       current_period_start: now.toISOString(),
       current_period_end: endsAt.toISOString(),
-      expiry_warning_sent_at: null, // column added in migration 011
-    } as Record<string, unknown>)
+      expiry_warning_sent_at: null,
+    })
     .eq("store_id", storeId);
 
   // 3. Update store.subscription_status
