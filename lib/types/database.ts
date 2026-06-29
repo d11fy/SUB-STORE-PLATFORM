@@ -741,7 +741,14 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      expire_overdue_subscriptions: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      merge_theme_settings: {
+        Args: { p_store_id: string; p_patch: Json };
+        Returns: Json;
+      };
     };
     CompositeTypes: {
       [_ in never]: never;
