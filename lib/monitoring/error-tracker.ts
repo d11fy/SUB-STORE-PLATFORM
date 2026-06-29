@@ -158,16 +158,15 @@ function emitToStdout(event: ErrorEvent): void {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const _loadSentry = new Function("return import('@sentry/nextjs')") as () => Promise<any>;
+
 // ── Emitter: Sentry (optional) ─────────────────────────────────────────────────
-// Uses /* webpackIgnore: true */ so webpack skips static analysis of the import.
-// At runtime: if @sentry/nextjs is not installed, the dynamic import rejects and
-// .catch() returns null — no build error, no crash.
 async function emitToSentry(event: ErrorEvent, original: Error): Promise<void> {
   if (!process.env.SENTRY_DSN) return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Sentry = await (import(/* webpackIgnore: true */ "@sentry/nextjs") as Promise<any>)
-      .catch(() => null);
+    const Sentry = await _loadSentry().catch(() => null);
     if (!Sentry) return;
 
     Sentry.withScope((scope: any) => {
