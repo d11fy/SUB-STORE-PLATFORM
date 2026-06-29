@@ -303,7 +303,10 @@ export function setupGlobalHandlers(): void {
   }
   (process as NodeJS.Process & { __sabaErrorHandlersInstalled?: boolean }).__sabaErrorHandlersInstalled = true;
 
-  process.on("unhandledRejection", (reason) => {
+  // Cast to EventEmitter so TypeScript resolves .on() in all module configs
+  const nodeProc = process as unknown as NodeJS.EventEmitter;
+
+  nodeProc.on("unhandledRejection", (reason: unknown) => {
     capture(
       reason instanceof Error ? reason : new Error(`Unhandled rejection: ${String(reason)}`),
       { action: "unhandled_rejection", route: "process" },
@@ -311,8 +314,12 @@ export function setupGlobalHandlers(): void {
     );
   });
 
-  process.on("uncaughtException", (err) => {
-    capture(err, { action: "uncaught_exception", route: "process" }, "fatal");
+  nodeProc.on("uncaughtException", (err: unknown) => {
+    capture(
+      err instanceof Error ? err : new Error(String(err)),
+      { action: "uncaught_exception", route: "process" },
+      "fatal"
+    );
     // Do NOT call process.exit() — let Next.js manage the process lifecycle
   });
 }
