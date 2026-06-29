@@ -44,7 +44,7 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
     subject: payload.subject,
     html: payload.html,
     text: payload.text,
-    reply_to: payload.replyTo,
+    replyTo: payload.replyTo,
   });
 
   if (error) {

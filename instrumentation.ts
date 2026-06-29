@@ -12,9 +12,11 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySentry = any;
 
-// Variable prevents TypeScript from statically resolving this optional package.
-// webpack/Turbopack cannot statically bundle a non-literal specifier either.
-const _sentryPkg = "@sentry/nextjs";
+// new Function is the only approach that is fully opaque to both TypeScript's
+// module resolver AND Turbopack's bundler. Neither can statically analyse a
+// string passed to Function() at runtime, so @sentry/nextjs is never required.
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const _loadModule = new Function("m", "return import(m)") as (m: string) => Promise<AnySentry>;
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -24,9 +26,7 @@ export async function register() {
 
   if (process.env.SENTRY_DSN) {
     try {
-      const Sentry: AnySentry = await (
-        import(_sentryPkg) as Promise<AnySentry>
-      ).catch(() => null);
+      const Sentry: AnySentry = await _loadModule("@sentry/nextjs").catch(() => null);
 
       Sentry?.init({
         dsn: process.env.SENTRY_DSN,
@@ -75,9 +75,7 @@ export async function onRequestError(
 
   if (process.env.SENTRY_DSN) {
     try {
-      const Sentry: AnySentry = await (
-        import(_sentryPkg) as Promise<AnySentry>
-      ).catch(() => null);
+      const Sentry: AnySentry = await _loadModule("@sentry/nextjs").catch(() => null);
       await Sentry?.captureRequestError?.(err, request, context);
     } catch {
       // Sentry forwarding must not affect the response
