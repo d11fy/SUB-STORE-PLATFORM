@@ -151,7 +151,7 @@ export async function proxy(request: NextRequest) {
         .eq("subdomain", merchantSubdomain)
         .maybeSingle();
       subSlug = subStore?.slug ?? null;
-      setCachedSlug(cacheKey, subSlug);
+      setCachedSlug(cacheKey, subSlug ?? null);
     }
 
     if (subSlug) {
@@ -205,7 +205,7 @@ export async function proxy(request: NextRequest) {
         (Array.isArray(storeRecord)
           ? storeRecord[0]?.slug
           : storeRecord?.slug) ?? null;
-      setCachedSlug(cacheKey, domainSlug);
+      setCachedSlug(cacheKey, domainSlug ?? null);
     }
 
     if (domainSlug) {
