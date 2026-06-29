@@ -743,7 +743,7 @@ export interface Database {
     Functions: {
       expire_overdue_subscriptions: {
         Args: Record<string, never>;
-        Returns: number;
+        Returns: Json;
       };
       merge_theme_settings: {
         Args: { p_store_id: string; p_patch: Json };

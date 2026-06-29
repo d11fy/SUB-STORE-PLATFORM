@@ -350,7 +350,7 @@ export async function runSubscriptionExpiryJob(): Promise<{
     return { success: false, expiredCount: 0, error: error.message };
   }
 
-  const result = data as { expired_count: number; run_at: string };
+  const result = data as unknown as { expired_count: number; run_at: string };
 
   await adminSupabase.from("admin_logs").insert({
     admin_id: user.id,
