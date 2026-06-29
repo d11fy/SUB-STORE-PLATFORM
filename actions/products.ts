@@ -30,7 +30,8 @@ export async function getProducts(options?: {
       .order("created_at", { ascending: false });
 
     if (options?.search) {
-      query = query.ilike("name", `%${options.search}%`);
+      const safeSearch = options.search.trim().slice(0, 100);
+      query = query.ilike("name", `%${safeSearch}%`);
     }
 
     if (options?.categoryId && options.categoryId !== "all") {

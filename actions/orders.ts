@@ -56,9 +56,9 @@ export async function getMerchantOrders(options?: {
       query = query.eq("status", options.status as OrderStatus);
     }
 
-    // Simple search by order_number or customer full_name
     if (options?.search) {
-      query = query.or(`order_number.ilike.%${options.search}%,full_name.ilike.%${options.search}%`);
+      const safeSearch = options.search.trim().slice(0, 100);
+      query = query.or(`order_number.ilike.%${safeSearch}%,full_name.ilike.%${safeSearch}%`);
     }
 
     const { data, error } = await query;

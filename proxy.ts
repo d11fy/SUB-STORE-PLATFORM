@@ -376,17 +376,26 @@ export async function proxy(request: NextRequest) {
 
   // ── 6. API Route Guard ──────────────────────────────────────────────────
   //
-  // All data mutations currently use Server Actions — there are no REST
-  // endpoints under /api/* that need auth at the middleware layer.
+  // Existing public/self-auth routes:
+  //   /auth/callback                 → public  (matched by isPublicPath above)
+  //   /store/[slug]/theme.css        → public  (matched by isPublicPath above)
+  //   /api/cron/check-subscriptions  → Bearer CRON_SECRET (self-guarded)
+  //   /api/monitoring/report         → public + rate-limited (self-guarded)
   //
-  // Existing route handlers:
-  //   /auth/callback          → public  (matched by isPublicPath above)
-  //   /store/[slug]/theme.css → public  (matched by isPublicPath above)
-  //
-  // If you add protected REST endpoints later, enforce them here:
-  //
-  //   if (pathname.startsWith("/api/admin")) { /* require platform_admin */ }
-  //   if (pathname.startsWith("/api/merchant")) { /* require user */ }
+  // Future admin REST endpoints must be under /api/admin/* — enforced below.
+  if (pathname.startsWith("/api/admin")) {
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const { data: apiProfile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (apiProfile?.role !== "platform_admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
 
   return supabaseResponse;
 }

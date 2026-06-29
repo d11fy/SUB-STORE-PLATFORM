@@ -80,9 +80,10 @@ async function getSmtpConfig(): Promise<SmtpConfig | null> {
     if (value) kv[key] = value;
   });
 
-  const host = kv.smtp_host || process.env.SMTP_HOST;
-  const user = kv.smtp_user || process.env.SMTP_USER;
-  const pass = kv.smtp_pass || process.env.SMTP_PASS;
+  // Env vars take priority over DB — credentials should live in Vercel env, not DB.
+  const host = process.env.SMTP_HOST || kv.smtp_host;
+  const user = process.env.SMTP_USER || kv.smtp_user;
+  const pass = process.env.SMTP_PASS || kv.smtp_pass;
 
   if (!host || !user || !pass) return null;
 

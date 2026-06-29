@@ -32,6 +32,10 @@ export async function validateAndCalculateOrder(
   total: number;
   error: string | null;
 }> {
+  if (!items.length || items.length > 50) {
+    return { subtotal: 0, shippingCost: 0, total: 0, error: "عدد المنتجات في السلة غير صالح" };
+  }
+
   const supabase = createAdminClient();
 
   // Fetch store
@@ -142,6 +146,10 @@ export async function createCustomerOrder(
   const validated = checkoutSchema.safeParse(checkoutInput);
   if (!validated.success) {
     return { success: false, orderId: null, orderNumber: null, error: validated.error.issues[0]?.message ?? "بيانات غير صالحة" };
+  }
+
+  if (!items.length || items.length > 50) {
+    return { success: false, orderId: null, orderNumber: null, error: "عدد المنتجات في السلة غير صالح" };
   }
 
   // IP-based rate limiting: 5 orders per minute per client IP.
