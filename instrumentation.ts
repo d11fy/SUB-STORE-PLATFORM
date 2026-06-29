@@ -12,6 +12,10 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySentry = any;
 
+// Variable prevents TypeScript from statically resolving this optional package.
+// webpack/Turbopack cannot statically bundle a non-literal specifier either.
+const _sentryPkg = "@sentry/nextjs";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
@@ -21,7 +25,7 @@ export async function register() {
   if (process.env.SENTRY_DSN) {
     try {
       const Sentry: AnySentry = await (
-        import(/* webpackIgnore: true */ "@sentry/nextjs") as Promise<AnySentry>
+        import(_sentryPkg) as Promise<AnySentry>
       ).catch(() => null);
 
       Sentry?.init({
@@ -72,7 +76,7 @@ export async function onRequestError(
   if (process.env.SENTRY_DSN) {
     try {
       const Sentry: AnySentry = await (
-        import(/* webpackIgnore: true */ "@sentry/nextjs") as Promise<AnySentry>
+        import(_sentryPkg) as Promise<AnySentry>
       ).catch(() => null);
       await Sentry?.captureRequestError?.(err, request, context);
     } catch {
